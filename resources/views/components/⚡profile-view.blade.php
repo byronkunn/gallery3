@@ -354,7 +354,8 @@ new class extends Component
             </div>
         @endif
         @if($isMe)
-                <span class="absolute bottom-4 right-4 inline-flex items-center gap-2 rounded-xl border border-white/30 bg-black/70 px-3 py-2 text-xs font-bold text-white shadow-lg transition group-hover:bg-black/85">
+                <span class="absolute inset-0 bg-black/20 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" aria-hidden="true"></span>
+                <span class="absolute bottom-4 right-4 inline-flex items-center gap-2 rounded-xl border border-white/30 bg-black/70 px-3 py-2 text-xs font-bold text-white opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-visible:opacity-100">
                     <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>
                     Change banner
                 </span>
@@ -381,7 +382,8 @@ new class extends Component
                     </div>
                 @endif
                 @if($isMe)
-                        <span class="absolute bottom-1 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 rounded-lg border border-white/30 bg-black/75 px-2 py-1 text-[10px] font-bold text-white shadow-lg transition group-hover:bg-black/90">
+                        <span class="absolute inset-0 rounded-full bg-black/20 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" aria-hidden="true"></span>
+                        <span class="absolute bottom-1 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 rounded-lg border border-white/30 bg-black/75 px-2 py-1 text-[10px] font-bold text-white opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-visible:opacity-100">
                             <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>
                             Edit avatar
                         </span>
