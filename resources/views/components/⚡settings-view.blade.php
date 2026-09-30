@@ -6,9 +6,11 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 new class extends Component
 {
+    use WithFileUploads;
     public string $activeCategory = 'account';
 
     public string $mobileScreen = 'list'; // 'list', 'detail'
@@ -38,6 +40,10 @@ new class extends Component
     public string $bio = '';
 
     public string $website = '';
+
+    public mixed $avatarUpload = null;
+
+    public mixed $bannerUpload = null;
 
     public string $profileVisibility = 'public';
 
@@ -301,6 +307,25 @@ new class extends Component
         abort_unless(Auth::check(), 401);
         Auth::user()->blockedUsers()->detach($userId);
         $this->dispatch('notify', 'User unblocked.');
+    }
+
+    public function saveProfileMedia(): void
+    {
+        abort_unless(Auth::check(), 401);
+
+        $this->validate([
+            'avatarUpload' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:12288'],
+            'bannerUpload' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:12288'],
+        ]);
+
+        $user = Auth::user();
+        $user->update([
+            'avatar_url' => $this->avatarUpload ? '/storage/'.$this->avatarUpload->storePublicly('avatars', 'public') : $user->avatar_url,
+            'banner_url' => $this->bannerUpload ? '/storage/'.$this->bannerUpload->storePublicly('banners', 'public') : $user->banner_url,
+        ]);
+
+        $this->reset('avatarUpload', 'bannerUpload');
+        $this->dispatch('notify', 'Profile images updated successfully!');
     }
 
     public function saveAccount()
@@ -577,6 +602,26 @@ new class extends Component
                         <div>
                             <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Website / Portfolio Link</label>
                             <input type="url" wire:model="website" class="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]" placeholder="https://yourportfolio.art">
+                        </div>
+
+                        <div class="space-y-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                            <div>
+                                <h3 class="text-xs font-bold text-[var(--text-main)]">Profile Images</h3>
+                                <p class="mt-1 text-xs text-[var(--text-dim)]">Choose files from your computer, tablet, or phone.</p>
+                            </div>
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <div>
+                                    <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Avatar</label>
+                                    <input type="file" wire:model="avatarUpload" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-[var(--text-muted)]">
+                                    @error('avatarUpload') <p class="mt-1 text-xs text-rose-400">{{ $message }}</p> @enderror
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Banner</label>
+                                    <input type="file" wire:model="bannerUpload" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-[var(--text-muted)]">
+                                    @error('bannerUpload') <p class="mt-1 text-xs text-rose-400">{{ $message }}</p> @enderror
+                                </div>
+                            </div>
+                            <button type="button" wire:click="saveProfileMedia" class="w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-xl accent-bg text-white text-xs font-extrabold shadow-md">Save Profile Images</button>
                         </div>
 
                         <div class="space-y-3 pt-4 border-t border-[var(--border-subtle)]">
