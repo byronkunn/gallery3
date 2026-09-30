@@ -126,7 +126,6 @@
                         @else
                             <span>{{ mb_substr($siteName, 0, 1) }}</span>
                         @endif
-                        <span class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-[var(--bg-surface)]"></span>
                     </div>
                     <span x-show="!navCollapsed" class="hidden md:inline font-extrabold text-xl tracking-tight bg-gradient-to-r from-[var(--text-main)] to-[var(--text-muted)] bg-clip-text text-transparent truncate">
                         {{ $siteName }}
