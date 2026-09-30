@@ -337,7 +337,7 @@ new class extends Component
     <!-- Header Banner Image (Twitter style) -->
     <div class="relative w-full h-48 sm:h-64 md:h-80 bg-neutral-900 overflow-hidden">
         @if($isMe)
-            <a href="{{ route('settings', ['category' => 'profile']) }}" class="block h-full cursor-pointer" aria-label="Change your profile banner">
+            <a href="{{ route('settings', ['category' => 'profile']) }}" class="group block h-full cursor-pointer" aria-label="Change your profile banner">
         @endif
         @if($profileUser->banner_url)
             <img src="{{ $profileUser->banner_url }}"
@@ -354,6 +354,10 @@ new class extends Component
             </div>
         @endif
         @if($isMe)
+                <span class="absolute bottom-4 right-4 inline-flex items-center gap-2 rounded-xl border border-white/30 bg-black/70 px-3 py-2 text-xs font-bold text-white shadow-lg transition group-hover:bg-black/85">
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>
+                    Change banner
+                </span>
             </a>
         @endif
         <div class="absolute inset-0 bg-gradient-to-t from-[var(--bg-page)]/80 via-transparent to-black/20 pointer-events-none"></div>
@@ -365,7 +369,7 @@ new class extends Component
         <div class="flex items-end justify-between">
             <div class="relative">
                 @if($isMe)
-                    <a href="{{ route('settings', ['category' => 'profile']) }}" class="block cursor-pointer rounded-full" aria-label="Change your profile avatar">
+                    <a href="{{ route('settings', ['category' => 'profile']) }}" class="group relative block cursor-pointer rounded-full" aria-label="Change your profile avatar">
                 @endif
                 @if($profileUser->avatar_url)
                     <img src="{{ $profileUser->avatar_url }}"
@@ -377,6 +381,10 @@ new class extends Component
                     </div>
                 @endif
                 @if($isMe)
+                        <span class="absolute bottom-1 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 rounded-lg border border-white/30 bg-black/75 px-2 py-1 text-[10px] font-bold text-white shadow-lg transition group-hover:bg-black/90">
+                            <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>
+                            Edit avatar
+                        </span>
                     </a>
                 @endif
                 @if($profileUser->is_artist)
