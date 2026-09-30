@@ -12,6 +12,7 @@ use App\Models\Post;
 use App\Models\PostMedia;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
@@ -292,7 +293,7 @@ class CoreFeatureFlowsTest extends TestCase
         Livewire::actingAs($uploader)->test('⚡upload-view')
             ->set('title', 'Archived Masterpiece')
             ->set('description', 'Uploaded from external portfolio')
-            ->set('images', ['https://example.test/archived.png'])
+            ->set('imageUploads', [UploadedFile::fake()->image('archived.png')])
             ->set('isOriginalCreator', false)
             ->set('artistName', 'WLOP')
             ->set('artistUrl', 'https://pixiv.net/users/123456')

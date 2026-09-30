@@ -8,6 +8,7 @@ use App\Models\Tag;
 use App\Support\SiteSettings;
 use App\Support\SpamControls;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -16,127 +17,42 @@ new class extends Component
 {
     use WithFileUploads;
 
-    public string $uploadMode = 'single'; // 'single' or 'batch'
-
-    public string $mediaType = 'image'; // 'image' or 'video'
-
+    public string $uploadMode = 'single';
+    public string $mediaType = 'image';
     public string $title = '';
-
     public string $description = '';
-
     public string $sourceUrl = '';
-
     public bool $isNsfw = false;
-
     public bool $isOriginalCreator = true;
-
     public string $artistName = '';
-
     public string $artistUrl = '';
-
-    public string $taggingMode = 'whole'; // 'whole' or 'per_image'
-
+    public string $taggingMode = 'whole';
     public string $tagInput = '';
-
     public ?int $targetPoolId = null;
-
-    // Batch Upload Fields
-    public string $batchUrlsInput = '';
-
     public array $batchItems = [];
-
+    public array $batchUploads = [];
     public string $bulkTagInput = '';
-
     public array $imageUploads = [];
-
     public mixed $videoUpload = null;
 
-    public array $images = [''];
-
-    public string $videoUrl = '';
-
-    public string $videoThumbnailUrl = '/sfw/image/sample_fd6cf1c5b5dda7658bf8b050ebb8240f.jpg';
-
-    public function loadSfwVideoPreset(string $path)
+    public function setUploadMode(string $mode): void
     {
-        $this->mediaType = 'video';
-        $this->videoUrl = $path;
-        $this->videoThumbnailUrl = '/sfw/image/sample_fd6cf1c5b5dda7658bf8b050ebb8240f.jpg';
-        $this->dispatch('notify', 'Loaded video asset from /sfw/video folder!');
+        $this->uploadMode = in_array($mode, ['single', 'batch'], true) ? $mode : 'single';
     }
 
-    public function setUploadMode(string $mode)
+    public function updatedBatchUploads(): void
     {
-        $this->uploadMode = $mode;
-        if ($mode === 'batch' && empty($this->batchItems)) {
-            $this->loadPresetBatch();
-        }
-    }
-
-    public function loadPresetBatch()
-    {
-        $presetUrls = [
-            'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?auto=format&fit=crop&w=1400&q=85',
-            'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1400&q=85',
-            'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=1400&q=85',
-            'https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=1400&q=85',
-        ];
-
-        $this->batchItems = [];
-        foreach ($presetUrls as $idx => $url) {
-            $this->batchItems[] = [
-                'url' => $url,
-                'title' => 'Batch Artwork #'.($idx + 1),
+        $existing = $this->batchItems;
+        $this->batchItems = collect($this->batchUploads)->values()->map(function ($upload, int $index) use ($existing): array {
+            return $existing[$index] ?? [
+                'title' => 'Artwork #'.($index + 1),
                 'is_nsfw' => false,
-                'tags_input' => 'digital_art, illustration, character_design, high_resolution',
+                'tags_input' => '',
             ];
-        }
-        $this->batchUrlsInput = implode("\n", $presetUrls);
+        })->all();
     }
 
-    public function parseBatchUrls()
-    {
-        $lines = array_map('trim', explode("\n", $this->batchUrlsInput));
-        $lines = array_filter($lines);
-        $this->batchItems = [];
-        foreach ($lines as $idx => $url) {
-            $this->batchItems[] = [
-                'url' => $url,
-                'title' => 'Artwork #'.($idx + 1),
-                'is_nsfw' => false,
-                'tags_input' => $this->detectAutoTags($url, $idx),
-            ];
-        }
-        $this->dispatch('notify', 'Parsed '.count($this->batchItems).' batch items with URL-based tag suggestions.');
-    }
-
-    public function detectAutoTags(string $url, int $index): string
-    {
-        $path = strtolower((string) parse_url($url, PHP_URL_PATH));
-        $suggestions = [];
-        foreach ([
-            'landscape|scenery|mountain|forest|city' => ['scenery', 'landscape'],
-            'portrait|character|girl|boy|person' => ['character_design', 'portrait'],
-            'concept|environment|world' => ['concept_art', 'environment_design'],
-            'anime|manga' => ['anime', 'manga_style'],
-        ] as $pattern => $tags) {
-            if (preg_match('/'.$pattern.'/i', $path)) {
-                $suggestions = array_merge($suggestions, $tags);
-            }
-        }
-
-        return implode(', ', array_unique($suggestions ?: ['digital_art', 'illustration']));
-    }
-
-    public function autoDetectTagsForBatch()
-    {
-        foreach ($this->batchItems as $idx => &$item) {
-            $item['tags_input'] = $this->detectAutoTags($item['url'], $idx);
-        }
-        $this->dispatch('notify', 'Tag suggestions refreshed from the image URLs. Review them before publishing.');
-    }
-
-    public function applyBulkRating(bool $nsfw)
+    public function applyBulkRating(bool $nsfw): void
     {
         foreach ($this->batchItems as &$item) {
             $item['is_nsfw'] = $nsfw;
@@ -144,126 +60,72 @@ new class extends Component
         $this->dispatch('notify', 'Applied rating to all batch items!');
     }
 
-    public function applyBulkTag()
+    public function applyBulkTag(): void
     {
-        if (empty(trim($this->bulkTagInput))) {
-            return;
-        }
         $tagToApply = strtolower(trim(str_replace('#', '', $this->bulkTagInput)));
         $tagToApply = str_replace(' ', '_', $tagToApply);
-
+        if ($tagToApply === '') {
+            return;
+        }
         foreach ($this->batchItems as &$item) {
-            $existing = array_map('trim', explode(',', $item['tags_input']));
-            if (! in_array($tagToApply, $existing)) {
+            $existing = array_filter(array_map('trim', explode(',', $item['tags_input'] ?? '')));
+            if (! in_array($tagToApply, $existing, true)) {
                 $existing[] = $tagToApply;
-                $item['tags_input'] = implode(', ', array_filter($existing));
             }
+            $item['tags_input'] = implode(', ', $existing);
         }
         $this->bulkTagInput = '';
         $this->dispatch('notify', "Added #{$tagToApply} to all batch items!");
     }
 
-    public function removeBatchItem(int $index)
+    public function removeBatchItem(int $index): void
     {
-        unset($this->batchItems[$index]);
+        unset($this->batchItems[$index], $this->batchUploads[$index]);
         $this->batchItems = array_values($this->batchItems);
+        $this->batchUploads = array_values($this->batchUploads);
     }
 
     public function submitBatchPosts()
     {
         if (! Auth::check()) {
             $this->dispatch('notify', 'Please log in to upload batch posts');
-
             return;
         }
 
-        if (empty($this->batchItems)) {
-            $this->dispatch('notify', 'No batch items to upload');
-
-            return;
-        }
+        $this->validate([
+            'batchUploads' => ['required', 'array', 'max:40'],
+            'batchUploads.*' => ['required', 'image', 'mimes:jpg,jpeg,png,gif,webp', 'max:12288'],
+        ]);
 
         $user = Auth::user();
-        $createdCount = 0;
-
-        $validBatchItems = collect($this->batchItems)->filter(fn (array $item): bool => filled(trim($item['url'] ?? '')));
-        if ($validBatchItems->isEmpty()) {
-            $this->dispatch('notify', 'Add at least one valid URL before uploading.');
-
-            return;
-        }
-        SpamControls::enforce('posts', 12, 3600, json_encode($validBatchItems->all()), $validBatchItems->count());
-
-        foreach ($validBatchItems as $item) {
-            $url = trim($item['url']);
-            if (empty($url)) {
-                continue;
+        SpamControls::enforce('posts', 12, 3600, 'batch:'.$user->id, count($this->batchUploads));
+        $createdCount = DB::transaction(function () use ($user): int {
+            $created = 0;
+            foreach ($this->batchUploads as $index => $upload) {
+                $path = $upload->storePublicly('posts', 'public');
+                [$width, $height] = getimagesize($upload->getRealPath()) ?: [1400, 1000];
+                $item = $this->batchItems[$index] ?? [];
+                $post = Post::create([
+                    'user_id' => $user->id,
+                    'title' => trim($item['title'] ?? '') ?: 'Batch Artwork',
+                    'description' => 'Uploaded via Batch Multi-Post Uploader',
+                    'media_type' => 'image',
+                    'media_count' => 1,
+                    'views_count' => 0,
+                    'likes_count' => 0,
+                    'is_nsfw' => (bool) ($item['is_nsfw'] ?? false),
+                ]);
+                $url = '/storage/'.$path;
+                PostMedia::create(['post_id' => $post->id, 'order' => 1, 'url' => $url, 'thumbnail_url' => $url, 'width' => $width, 'height' => $height, 'aspect_ratio' => $height > 0 ? $width / $height : 1.4]);
+                $this->attachTags($post, $user, $item['tags_input'] ?? '');
+                $created++;
             }
-
-            $isVid = (bool) preg_match('/\.(mp4|webm|mov)(\?.*)?$/i', $url) || str_contains($url, '/video/');
-            $post = Post::create([
-                'user_id' => $user->id,
-                'title' => $item['title'] ?: ($isVid ? 'Video Post' : 'Batch Artwork'),
-                'description' => 'Uploaded via Batch Multi-Post Uploader',
-                'media_type' => $isVid ? 'video' : 'image',
-                'media_count' => 1,
-                'views_count' => 0,
-                'likes_count' => 0,
-                'is_nsfw' => $item['is_nsfw'] ?? false,
-            ]);
-
-            PostMedia::create([
-                'post_id' => $post->id,
-                'order' => 1,
-                'url' => $url,
-                'thumbnail_url' => $url,
-                'width' => 1400,
-                'height' => 1000,
-                'aspect_ratio' => 1.4,
-            ]);
-
-            $parsedTags = array_map('trim', explode(',', $item['tags_input']));
-            $parsedTags[] = $user->username;
-
-            foreach (array_unique($parsedTags) as $tName) {
-                $cleanName = strtolower(trim(str_replace('#', '', $tName)));
-                $cleanName = str_replace(' ', '_', $cleanName);
-                if (empty($cleanName)) {
-                    continue;
-                }
-
-                $tag = Tag::firstOrCreate(
-                    ['name' => $cleanName],
-                    ['slug' => Str::slug($cleanName), 'type' => 'general']
-                );
-                $post->tags()->syncWithoutDetaching([$tag->id]);
-                $tag->increment('posts_count');
-            }
-            $createdCount++;
-        }
+            $user->increment('reputation_score', 10 * $created);
+            return $created;
+        });
 
         $this->dispatch('notify', "Successfully published {$createdCount} batch posts!");
-
         return redirect()->route('gallery');
-    }
-
-    public function addImageSlot()
-    {
-        if (count($this->images) >= 40) {
-            $this->dispatch('notify', 'Maximum 40 images allowed per regular post');
-
-            return;
-        }
-        $this->images[] = '';
-    }
-
-    public function removeImage(int $index)
-    {
-        if (count($this->images) <= 1) {
-            return;
-        }
-        unset($this->images[$index]);
-        $this->images = array_values($this->images);
     }
 
     public function removeImageUpload(int $index): void
@@ -272,27 +134,10 @@ new class extends Component
         $this->imageUploads = array_values($this->imageUploads);
     }
 
-    private function isAllowedMediaUrl(mixed $value): bool
+    public function addTag(string $tagName): void
     {
-        if (blank($value)) {
-            return true;
-        }
-        if (! is_string($value)) {
-            return false;
-        }
-
-        if (filter_var($value, FILTER_VALIDATE_URL)) {
-            return in_array(parse_url($value, PHP_URL_SCHEME), ['http', 'https'], true);
-        }
-
-        return preg_match('#^/(?:sfw/(?:image|video)|storage/(?:posts|videos))/[A-Za-z0-9._/-]+$#', $value) === 1;
-    }
-
-    public function addTag(string $tagName)
-    {
-        $tags = array_map('trim', explode(',', $this->tagInput));
-        $tags = array_filter($tags);
-        if (! in_array($tagName, $tags)) {
+        $tags = array_filter(array_map('trim', explode(',', $this->tagInput)));
+        if (! in_array($tagName, $tags, true)) {
             $tags[] = $tagName;
             $this->tagInput = implode(', ', $tags);
         }
@@ -301,10 +146,8 @@ new class extends Component
     public function submitPost()
     {
         abort_unless(SiteSettings::bool('site_uploads_enabled'), 403, 'Uploads are currently disabled.');
-
         if (! Auth::check()) {
             $this->dispatch('notify', 'Please log in to upload');
-
             return;
         }
 
@@ -312,143 +155,78 @@ new class extends Component
             'title' => 'required|string|max:150',
             'description' => 'nullable|string|max:2000',
             'sourceUrl' => 'nullable|url|max:2048',
-            'images' => ['array', 'max:40'],
-            'images.*' => ['nullable', 'string', 'max:2048', function (string $attribute, mixed $value, \Closure $fail): void {
-                if (! $this->isAllowedMediaUrl($value)) {
-                    $fail('Use an HTTP(S) image URL or a supported local media path.');
-                }
-            }],
             'imageUploads' => ['array', 'max:40'],
             'imageUploads.*' => ['image', 'mimes:jpg,jpeg,png,gif,webp', 'max:12288'],
-            'videoUpload' => ['nullable', 'file', 'mimes:mp4,webm,mov', 'max:12288'],
-            'videoUrl' => ['nullable', 'string', 'max:2048', function (string $attribute, mixed $value, \Closure $fail): void {
-                if (! $this->isAllowedMediaUrl($value)) {
-                    $fail('Use an HTTP(S) video URL or a supported local media path.');
-                }
-            }],
+            'videoUpload' => ['nullable', 'file', 'mimes:mp4,webm,mov', 'max:512000'],
         ]);
-        if ($this->mediaType === 'image' && collect($this->images)->filter(fn ($url) => filled(trim((string) $url)))->isEmpty() && $this->imageUploads === []) {
-            $this->addError('imageUploads', 'Choose at least one image file or provide an image URL.');
+        if ($this->mediaType === 'image' && count($this->imageUploads) === 0) {
+            $this->addError('imageUploads', 'Choose at least one image file.');
             return;
         }
-        if ($this->mediaType === 'video' && ! $this->videoUpload && blank($this->videoUrl)) {
-            $this->addError('videoUpload', 'Choose a video file or provide a video URL.');
+        if ($this->mediaType === 'video' && ! $this->videoUpload) {
+            $this->addError('videoUpload', 'Choose a video file.');
             return;
         }
-        if ($this->mediaType === 'image' && count($this->imageUploads) + count(array_filter($this->images, fn ($url) => filled(trim((string) $url)))) > 40) {
-            $this->addError('imageUploads', 'A post can contain up to 40 images.');
-            return;
-        }
-
-        SpamControls::enforce('posts', 12, 3600, $this->title.' '.$this->description.' '.implode(' ', $this->images));
 
         $user = Auth::user();
-
-        // 1. Create Post
-        $post = Post::create([
-            'user_id' => $user->id,
-            'is_original_creator' => $this->isOriginalCreator,
-            'artist_name' => ! $this->isOriginalCreator && filled(trim($this->artistName)) ? trim($this->artistName) : null,
-            'artist_url' => ! $this->isOriginalCreator && filled(trim($this->artistUrl)) ? trim($this->artistUrl) : null,
-            'title' => $this->title,
-            'description' => $this->description,
-            'media_type' => $this->mediaType,
-            'media_count' => $this->mediaType === 'image' ? count($this->imageUploads) + count(array_filter($this->images, fn ($url) => filled(trim((string) $url)))) : 1,
-            'views_count' => 0,
-            'likes_count' => 0,
-            'is_nsfw' => $this->isNsfw,
-            'source_url' => $this->sourceUrl,
-        ]);
-
-        // Reward user with reputation for contributing artwork (+10 rep)
-        $user->increment('reputation_score', 10);
-
-        // 2. Attach Media
-        if ($this->mediaType === 'image') {
-            $mediaItems = [];
-            foreach ($this->imageUploads as $upload) {
-                $path = $upload->storePublicly('posts', 'public');
-                [$width, $height] = getimagesize($upload->getRealPath()) ?: [1400, 1000];
-                $mediaItems[] = [
-                    'url' => '/storage/'.$path,
-                    'width' => $width,
-                    'height' => $height,
-                    'aspect_ratio' => $height > 0 ? $width / $height : 1.4,
-                ];
+        SpamControls::enforce('posts', 12, 3600, $this->title.' '.$this->description, 1);
+        $post = DB::transaction(function () use ($user): Post {
+            $post = Post::create([
+                'user_id' => $user->id,
+                'is_original_creator' => $this->isOriginalCreator,
+                'artist_name' => ! $this->isOriginalCreator && filled(trim($this->artistName)) ? trim($this->artistName) : null,
+                'artist_url' => ! $this->isOriginalCreator && filled(trim($this->artistUrl)) ? trim($this->artistUrl) : null,
+                'title' => $this->title,
+                'description' => $this->description,
+                'media_type' => $this->mediaType,
+                'media_count' => $this->mediaType === 'image' ? count($this->imageUploads) : 1,
+                'views_count' => 0,
+                'likes_count' => 0,
+                'is_nsfw' => $this->isNsfw,
+                'source_url' => $this->sourceUrl,
+            ]);
+            if ($this->mediaType === 'image') {
+                foreach ($this->imageUploads as $index => $upload) {
+                    $path = $upload->storePublicly('posts', 'public');
+                    [$width, $height] = getimagesize($upload->getRealPath()) ?: [1400, 1000];
+                    $url = '/storage/'.$path;
+                    PostMedia::create(['post_id' => $post->id, 'order' => $index + 1, 'url' => $url, 'thumbnail_url' => $url, 'width' => $width, 'height' => $height, 'aspect_ratio' => $height > 0 ? $width / $height : 1.4]);
+                }
+            } else {
+                $path = $this->videoUpload->storePublicly('videos', 'public');
+                $url = '/storage/'.$path;
+                PostMedia::create(['post_id' => $post->id, 'order' => 1, 'url' => $url, 'thumbnail_url' => $url, 'width' => 1280, 'height' => 720, 'aspect_ratio' => 1.77, 'duration' => 20]);
             }
-            foreach ($this->images as $url) {
-                if (filled(trim((string) $url))) {
-                    $mediaItems[] = ['url' => trim($url), 'width' => 1400, 'height' => 1000, 'aspect_ratio' => 1.4];
+            $this->attachTags($post, $user, $this->tagInput);
+            if ($this->targetPoolId) {
+                $pool = Pool::find($this->targetPoolId);
+                if ($pool && (! $pool->is_locked || $pool->user_id === $user->id)) {
+                    $chNum = $pool->chapters()->count() + 1;
+                    PoolChapter::create(['pool_id' => $pool->id, 'post_id' => $post->id, 'chapter_number' => $chNum, 'title' => $this->title, 'order' => $chNum]);
+                    $pool->increment('chapters_count');
                 }
             }
+            $user->increment('reputation_score', 10);
+            return $post;
+        });
 
-            foreach ($mediaItems as $idx => $item) {
-                PostMedia::create([
-                    'post_id' => $post->id,
-                    'order' => $idx + 1,
-                    'url' => $item['url'],
-                    'thumbnail_url' => $item['url'],
-                    'width' => $item['width'],
-                    'height' => $item['height'],
-                    'aspect_ratio' => $item['aspect_ratio'],
-                ]);
-            }
-        } else {
-            $videoPath = $this->videoUpload?->storePublicly('videos', 'public');
-            $videoUrl = $videoPath ? '/storage/'.$videoPath : $this->videoUrl;
-            PostMedia::create([
-                'post_id' => $post->id,
-                'order' => 1,
-                'url' => $videoUrl,
-                'thumbnail_url' => $this->videoThumbnailUrl ?: $videoUrl,
-                'width' => 1280,
-                'height' => 720,
-                'aspect_ratio' => 1.77,
-                'duration' => 20,
-            ]);
-        }
+        $this->dispatch('notify', 'Artwork published successfully!');
+        return redirect()->route('post.detail', $post->id);
+    }
 
-        // 3. Attach Tags
-        $parsedTags = array_map('trim', explode(',', $this->tagInput));
-        $parsedTags = array_filter($parsedTags);
-
-        // Always add author tag automatically
+    private function attachTags(Post $post, $user, string $tagInput): void
+    {
+        $parsedTags = array_filter(array_map('trim', explode(',', $tagInput)));
         $parsedTags[] = $user->username;
-
-        foreach (array_unique($parsedTags) as $tName) {
-            $cleanName = strtolower(trim(str_replace('#', '', $tName)));
-            $cleanName = str_replace(' ', '_', $cleanName);
-            if (empty($cleanName)) {
+        foreach (array_unique($parsedTags) as $tagName) {
+            $cleanName = str_replace(' ', '_', strtolower(trim(str_replace('#', '', $tagName))));
+            if ($cleanName === '') {
                 continue;
             }
-
-            $tag = Tag::firstOrCreate(
-                ['name' => $cleanName],
-                ['slug' => Str::slug($cleanName), 'type' => 'general']
-            );
+            $tag = Tag::firstOrCreate(['name' => $cleanName], ['slug' => Str::slug($cleanName), 'type' => 'general']);
             $post->tags()->syncWithoutDetaching([$tag->id]);
             $tag->increment('posts_count');
         }
-
-        // 4. Attach to Pool if specified
-        if ($this->targetPoolId) {
-            $pool = Pool::find($this->targetPoolId);
-            if ($pool && (! $pool->is_locked || $pool->user_id === $user->id)) {
-                $chNum = $pool->chapters()->count() + 1;
-                PoolChapter::create([
-                    'pool_id' => $pool->id,
-                    'post_id' => $post->id,
-                    'chapter_number' => $chNum,
-                    'title' => $this->title,
-                    'order' => $chNum,
-                ]);
-                $pool->increment('chapters_count');
-            }
-        }
-
-        $this->dispatch('notify', 'Artwork published successfully!');
-
-        return redirect()->route('post.detail', $post->id);
     }
 
     public function render()
@@ -456,12 +234,7 @@ new class extends Component
         $user = Auth::user();
         $availablePools = $user ? Pool::where('is_locked', false)->orWhere('user_id', $user->id)->get() : collect();
         $suggestedTags = Tag::orderBy('posts_count', 'desc')->take(16)->get();
-
-        return view('components.⚡upload-view', [
-            'currentUser' => $user,
-            'availablePools' => $availablePools,
-            'suggestedTags' => $suggestedTags,
-        ]);
+        return view('components.⚡upload-view', compact('user', 'availablePools', 'suggestedTags'));
     }
 };
 ?>
@@ -469,7 +242,7 @@ new class extends Component
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <div class="mb-6">
         <h1 class="text-2xl font-black tracking-tight text-[var(--text-main)]">Upload Artwork / Media</h1>
-        <p class="text-xs text-[var(--text-dim)]">Share up to 40 images or an MP4, WebM, or MOV video file up to 12 MB. You can also use direct media URLs.</p>
+        <p class="text-xs text-[var(--text-dim)]">Share up to 40 images or an MP4, WebM, or MOV video file from your device.</p>
     </div>
 
     @if(!Auth::check())
@@ -533,10 +306,7 @@ new class extends Component
             <div class="p-6 rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-4">
                 @if($mediaType === 'image')
                     <div class="flex items-center justify-between">
-                        <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Images ({{ count($imageUploads) + count(array_filter($images, fn ($url) => filled(trim((string) $url)))) }} / 40)</label>
-                        <button type="button" wire:click="addImageSlot" class="px-3 py-1.5 rounded-xl accent-bg text-white font-bold text-xs shadow hover:opacity-90">
-                            + Add Image URL
-                        </button>
+                        <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Images ({{ count($imageUploads) }} / 40)</label>
                     </div>
 
                     <label class="block rounded-2xl border border-dashed border-[var(--border-medium)] p-4 text-sm font-semibold">
@@ -558,32 +328,7 @@ new class extends Component
                         @endforeach
                     </div>
 
-                    <div class="space-y-3">
-                        @foreach($images as $idx => $imgUrl)
-                            <div class="flex items-center gap-3 p-3 rounded-2xl bg-[var(--bg-page)] border border-[var(--border-subtle)]">
-                                <span class="font-mono text-xs text-[var(--text-dim)] w-6 text-center font-bold">{{ $idx + 1 }}</span>
-                                <div class="w-12 h-12 rounded-xl bg-neutral-900 overflow-hidden shrink-0">
-                                    @if(!empty($imgUrl))
-                                        <img src="{{ $imgUrl }}" class="w-full h-full object-cover">
-                                    @else
-                                        <div class="w-full h-full flex items-center justify-center text-[var(--text-dim)] text-xs">Empty</div>
-                                    @endif
-                                </div>
-                                <input type="url" 
-                                       wire:model.live.debounce.300ms="images.{{ $idx }}" 
-                                       placeholder="Paste Image URL (https://...)" 
-                                       class="flex-1 bg-transparent border-0 text-sm outline-none text-[var(--text-main)] placeholder-[var(--text-dim)]">
-                                
-                                @if(count($images) > 1)
-                                    <button type="button" wire:click="removeImage({{ $idx }})" class="p-2 text-rose-400 hover:text-rose-200">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                        </svg>
-                                    </button>
-                                @endif
-                            </div>
-                        @endforeach
-                    </div>
+
                 @else
                     <div class="space-y-4">
                         <div>
@@ -596,14 +341,8 @@ new class extends Component
                                 <p class="mt-2 text-xs text-emerald-400">Selected: {{ $videoUpload->getClientOriginalName() }}</p>
                             @endif
                         </div>
-                        <div>
-                            <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Or use a video URL (.mp4 / webm)</label>
-                            <input type="url" wire:model="videoUrl" class="w-full mt-1 p-3 rounded-2xl bg-[var(--bg-page)] border border-[var(--border-subtle)] text-sm outline-none focus:border-[var(--accent-primary)]">
-                        </div>
-                        <div>
-                            <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Video Poster / Thumbnail URL</label>
-                            <input type="url" wire:model="videoThumbnailUrl" class="w-full mt-1 p-3 rounded-2xl bg-[var(--bg-page)] border border-[var(--border-subtle)] text-sm outline-none focus:border-[var(--accent-primary)]">
-                        </div>
+
+
                     </div>
                 @endif
             </div>
@@ -722,29 +461,19 @@ new class extends Component
         @else
             <!-- Batch Multi-Post Uploader Mode -->
             <div class="space-y-6">
-                <!-- Batch URLs Input Box -->
+                <!-- Batch Device Upload Box -->
                 <div class="p-6 rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-4">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h3 class="font-bold text-base text-[var(--text-main)]">1. Multi-File Drag & Drop / URL Batch Input</h3>
-                            <p class="text-xs text-[var(--text-dim)]">Paste one image URL per line to create multiple separate gallery posts at once.</p>
-                        </div>
-                        <button type="button" wire:click="loadPresetBatch" class="px-3 py-1.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] text-xs font-bold hover:bg-[var(--bg-surface)] transition">
-                            Load Demo Batch Presets
-                        </button>
+                    <div>
+                        <h3 class="font-bold text-base text-[var(--text-main)]">1. Select Multiple Images</h3>
+                        <p class="text-xs text-[var(--text-dim)]">Choose image files from your computer, tablet, or phone. Each file becomes its own gallery post.</p>
                     </div>
-
-                    <textarea wire:model="batchUrlsInput" rows="4" placeholder="https://images.unsplash.com/photo-1...&#10;https://images.unsplash.com/photo-2...&#10;https://images.unsplash.com/photo-3..." class="w-full p-3.5 rounded-2xl bg-[var(--bg-page)] border border-[var(--border-subtle)] text-sm outline-none font-mono focus:border-[var(--accent-primary)]"></textarea>
-
-                    <div class="flex items-center justify-between">
-                        <button type="button" wire:click="parseBatchUrls" class="px-5 py-2.5 rounded-2xl accent-bg text-white font-bold text-xs shadow hover:opacity-90 transition flex items-center gap-1.5">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                            </svg>
-                            <span>Parse Image URLs into Batch Items</span>
-                        </button>
-                        <span class="text-xs text-[var(--text-dim)] font-mono">{{ count($batchItems) }} items queued</span>
-                    </div>
+                    <label class="block rounded-2xl border border-dashed border-[var(--border-medium)] p-4 text-sm font-semibold">
+                        <span>Choose image files (JPG, PNG, GIF, WebP; up to 12 MB each)</span>
+                        <input type="file" wire:model="batchUploads" accept="image/jpeg,image/png,image/gif,image/webp" multiple class="mt-2 block w-full text-xs">
+                    </label>
+                    @error('batchUploads') <p class="text-xs text-rose-400">{{ $message }}</p> @enderror
+                    @error('batchUploads.*') <p class="text-xs text-rose-400">{{ $message }}</p> @enderror
+                    <span class="text-xs text-[var(--text-dim)] font-mono">{{ count($batchItems) }} items queued</span>
                 </div>
 
                 @if(count($batchItems) > 0)
@@ -753,12 +482,8 @@ new class extends Component
                         <div class="flex items-center justify-between">
                             <h3 class="font-bold text-base text-[var(--text-main)] flex items-center gap-2">
                                 <span>2. Bulk Editor Tools</span>
-                                <span class="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-xs border border-indigo-500/30 font-bold">URL-Based Suggestions</span>
+                                <span class="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-xs border border-indigo-500/30 font-bold">Bulk editing</span>
                             </h3>
-
-                            <button type="button" wire:click="autoDetectTagsForBatch" class="px-3.5 py-1.5 rounded-xl bg-purple-500/15 text-purple-400 border border-purple-500/30 text-xs font-bold hover:bg-purple-500/25 transition flex items-center gap-1.5">
-                                ⚡ Refresh Tag Suggestions
-                            </button>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
@@ -791,7 +516,9 @@ new class extends Component
                             @foreach($batchItems as $bIdx => $bItem)
                                 <div class="p-4 rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] flex gap-4 relative group">
                                     <div class="w-24 h-32 rounded-2xl bg-neutral-900 overflow-hidden shrink-0 shadow border border-[var(--border-subtle)]">
-                                        <img src="{{ $bItem['url'] }}" class="w-full h-full object-cover">
+                                        @if(isset($batchUploads[$bIdx]))
+                                            <img src="{{ $batchUploads[$bIdx]->temporaryUrl() }}" class="w-full h-full object-cover">
+                                        @endif
                                     </div>
 
                                     <div class="flex-1 min-w-0 space-y-2">

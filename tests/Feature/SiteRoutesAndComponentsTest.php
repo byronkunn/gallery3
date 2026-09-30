@@ -9,6 +9,7 @@ use App\Models\Pool;
 use App\Models\Post;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -154,8 +155,7 @@ class SiteRoutesAndComponentsTest extends TestCase
             ->test('⚡upload-view')
             ->call('setUploadMode', 'batch')
             ->assertSet('uploadMode', 'batch')
-            ->call('loadPresetBatch')
-            ->call('autoDetectTagsForBatch')
+            ->set('batchUploads', [UploadedFile::fake()->image('batch.jpg')])
             ->call('applyBulkRating', true)
             ->call('submitBatchPosts')
             ->assertRedirect(route('gallery'));
@@ -165,7 +165,7 @@ class SiteRoutesAndComponentsTest extends TestCase
             ->test('⚡upload-view')
             ->set('title', 'Test Unit Post')
             ->set('description', 'Test Description')
-            ->set('images', ['/sfw/image/sample_fd6cf1c5b5dda7658bf8b050ebb8240f.jpg'])
+            ->set('imageUploads', [UploadedFile::fake()->image('unit.jpg')])
             ->set('tagInput', 'unit_test, fantasy')
             ->call('submitPost');
 
