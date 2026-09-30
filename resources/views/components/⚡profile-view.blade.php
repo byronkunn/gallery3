@@ -52,10 +52,6 @@ new class extends Component
 
     public string $editCommissionStatus = 'Open';
 
-    public string $editAvatarUrl = '';
-
-    public string $editBannerUrl = '';
-
     public mixed $avatarUpload = null;
 
     public mixed $bannerUpload = null;
@@ -74,8 +70,6 @@ new class extends Component
         $this->editBio = $user->bio ?? '';
         $this->editWebsite = $user->website ?? '';
         $this->editCommissionStatus = $user->commission_status ?? 'Open';
-        $this->editAvatarUrl = $user->avatar_url ?? '';
-        $this->editBannerUrl = $user->banner_url ?? '';
     }
 
     public function setTab(string $tab)
@@ -256,26 +250,16 @@ new class extends Component
             'editBio' => 'nullable|string|max:500',
             'editWebsite' => 'nullable|url|max:200',
             'editCommissionStatus' => 'required|in:Open,Closed,Waitlist',
-            'editAvatarUrl' => ['nullable', 'string', 'max:2048', function (string $attribute, mixed $value, \Closure $fail): void {
-                if (filled($value) && ! filter_var($value, FILTER_VALIDATE_URL) && ! str_starts_with($value, '/storage/')) {
-                    $fail('Enter a valid URL or use an image uploaded to your account.');
-                }
-            }],
-            'editBannerUrl' => ['nullable', 'string', 'max:2048', function (string $attribute, mixed $value, \Closure $fail): void {
-                if (filled($value) && ! filter_var($value, FILTER_VALIDATE_URL) && ! str_starts_with($value, '/storage/')) {
-                    $fail('Enter a valid URL or use an image uploaded to your account.');
-                }
-            }],
             'avatarUpload' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:12288'],
             'bannerUpload' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:12288'],
         ]);
 
         $avatarUrl = $this->avatarUpload
             ? '/storage/'.$this->avatarUpload->storePublicly('avatars', 'public')
-            : ($this->editAvatarUrl ?: $user->avatar_url);
+            : $user->avatar_url;
         $bannerUrl = $this->bannerUpload
             ? '/storage/'.$this->bannerUpload->storePublicly('banners', 'public')
-            : ($this->editBannerUrl ?: $user->banner_url);
+            : $user->banner_url;
 
         $user->update([
             'name' => $this->editName,
@@ -716,16 +700,14 @@ new class extends Component
                 </div>
 
                 <div>
-                    <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Avatar Image URL</label>
-                    <input type="url" wire:model="editAvatarUrl" class="w-full mt-1 p-3 rounded-2xl bg-[var(--bg-page)] border border-[var(--border-subtle)] text-sm outline-none focus:border-[var(--accent-primary)]">
-                    <label class="mt-2 block text-xs text-[var(--text-muted)]">Or choose an image file (JPG, PNG, WebP; up to 12 MB)<input type="file" wire:model="avatarUpload" accept="image/jpeg,image/png,image/webp" class="mt-1 block w-full"></label>
+                    <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Avatar Image</label>
+                    <label class="mt-1 block text-xs text-[var(--text-muted)]">Choose an image from this device (JPG, PNG, WebP; up to 12 MB)<input type="file" wire:model="avatarUpload" accept="image/jpeg,image/png,image/webp" class="mt-1 block w-full"></label>
                     @error('avatarUpload') <p class="text-xs text-rose-400">{{ $message }}</p> @enderror
                 </div>
 
                 <div>
-                    <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Banner Image URL</label>
-                    <input type="url" wire:model="editBannerUrl" class="w-full mt-1 p-3 rounded-2xl bg-[var(--bg-page)] border border-[var(--border-subtle)] text-sm outline-none focus:border-[var(--accent-primary)]">
-                    <label class="mt-2 block text-xs text-[var(--text-muted)]">Or choose an image file (JPG, PNG, WebP; up to 12 MB)<input type="file" wire:model="bannerUpload" accept="image/jpeg,image/png,image/webp" class="mt-1 block w-full"></label>
+                    <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Banner Image</label>
+                    <label class="mt-1 block text-xs text-[var(--text-muted)]">Choose an image from this device (JPG, PNG, WebP; up to 12 MB)<input type="file" wire:model="bannerUpload" accept="image/jpeg,image/png,image/webp" class="mt-1 block w-full"></label>
                     @error('bannerUpload') <p class="text-xs text-rose-400">{{ $message }}</p> @enderror
                 </div>
             </div>
