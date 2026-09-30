@@ -4,6 +4,7 @@ use App\Models\Like;
 use App\Models\Post;
 use App\Models\Tag;
 use App\Models\User;
+use App\Support\Notifier;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
@@ -29,7 +30,15 @@ new class extends Component
 
     public string $selectedTag = ''; // for backwards compatibility with incoming URLs
 
-    public string $sortMode = 'latest'; // 'latest', 'popular'
+    public string $sortMode = 'latest'; // 'latest', 'oldest', 'popular', 'most_viewed', 'random'
+
+    public string $mediaTypeFilter = 'all'; // 'all', 'image', 'gif', 'video', 'albums'
+
+    public string $videoDurationFilter = 'all'; // 'all', 'short', 'medium', 'long'
+
+    public string $followingSubFilter = 'all'; // 'all', 'users', 'artists', 'tags', 'collections'
+
+    public string $followingSort = 'newest'; // 'newest', 'popular', 'most_liked'
 
     public string $timeRange = 'all'; // 'today', 'week', 'all'
 
@@ -38,7 +47,10 @@ new class extends Component
     public bool $blurNsfw = true;
 
     protected $queryString = [
-        'activeTab' => ['except' => 'latest'],
+        'activeTab' => ['except' => 'for-you'],
+        'followingSubFilter' => ['except' => 'all'],
+        'mediaTypeFilter' => ['except' => 'all'],
+        'videoDurationFilter' => ['except' => 'all'],
         'search' => ['except' => ''],
         'selectedTags' => ['except' => []],
         'excludedTags' => ['except' => []],
@@ -67,7 +79,7 @@ new class extends Component
     public function mount()
     {
         if (! Auth::check() && $this->activeTab === 'following') {
-            $this->activeTab = 'latest';
+            $this->activeTab = 'for-you';
         }
 
         if (Auth::check()) {
@@ -91,6 +103,38 @@ new class extends Component
         }
         $this->activeTab = $tab;
         $this->resetPage();
+    }
+
+    public function setFollowingSubFilter(string $filter)
+    {
+        $this->followingSubFilter = in_array($filter, ['all', 'users', 'tags', 'collections'], true) ? $filter : 'all';
+        $this->resetPage();
+    }
+
+    public function notInterested(int $postId): void
+    {
+        $user = Auth::user();
+        if ($user) {
+            DB::table('user_disliked_posts')->updateOrInsert(
+                ['user_id' => $user->id, 'post_id' => $postId],
+                ['updated_at' => now(), 'created_at' => now()]
+            );
+            $this->dispatch('notify', 'Marked artwork as not interested.');
+            $this->resetPage();
+        }
+    }
+
+    public function muteTag(string $tagName): void
+    {
+        $user = Auth::user();
+        if ($user) {
+            $tag = Tag::where('name', $tagName)->first();
+            if ($tag) {
+                $user->mutedTags()->syncWithoutDetaching([$tag->id]);
+                $this->dispatch('notify', "Muted tag #{$tagName}.");
+                $this->resetPage();
+            }
+        }
     }
 
     public function setSort(string $mode, string $range = 'all')
@@ -167,11 +211,6 @@ new class extends Component
         } else {
             $this->addTag($clean);
         }
-    }
-
-    public function clearTag()
-    {
-        $this->clearAllTags();
     }
 
     public function performSearch()
@@ -258,6 +297,7 @@ new class extends Component
         } else {
             Like::create(['user_id' => $user->id, 'post_id' => $postId]);
             $post->increment('likes_count');
+            Notifier::like($post, $user);
             $this->dispatch('notify', 'Post liked!');
         }
     }
@@ -282,6 +322,18 @@ new class extends Component
         }
     }
 
+    public function setMediaTypeFilter(string $type): void
+    {
+        $this->mediaTypeFilter = in_array($type, ['all', 'image', 'gif', 'video', 'albums'], true) ? $type : 'all';
+        $this->resetPage();
+    }
+
+    public function setVideoDurationFilter(string $duration): void
+    {
+        $this->videoDurationFilter = in_array($duration, ['all', 'short', 'medium', 'long'], true) ? $duration : 'all';
+        $this->resetPage();
+    }
+
     public function render()
     {
         $user = Auth::user();
@@ -290,30 +342,67 @@ new class extends Component
         if ($user) {
             $query->whereNotIn('user_id', $user->blockedUsers()->select('users.id'))
                 ->whereNotIn('user_id', $user->blockedByUsers()->select('users.id'));
-        }
 
-        // Check tag blacklist if logged in
-        if ($user && $user->blacklistedTags()->exists()) {
-            $blacklistedTagIds = $user->blacklistedTags()->pluck('tags.id');
-            if ($user->hide_nsfw) {
-                $query->whereDoesntHave('tags', function ($q) use ($blacklistedTagIds) {
-                    $q->whereIn('tags.id', $blacklistedTagIds);
+            // Exclude disliked/hidden posts
+            $dislikedPostIds = DB::table('user_disliked_posts')->where('user_id', $user->id)->pluck('post_id');
+            if ($dislikedPostIds->isNotEmpty()) {
+                $query->whereNotIn('id', $dislikedPostIds);
+            }
+
+            // Exclude muted tags
+            $mutedTagIds = $user->mutedTags()->pluck('tags.id');
+            if ($mutedTagIds->isNotEmpty()) {
+                $query->whereDoesntHave('tags', function ($q) use ($mutedTagIds) {
+                    $q->whereIn('tags.id', $mutedTagIds);
                 });
             }
         }
 
         // Active Tab Logic
         if ($this->activeTab === 'following' && $user) {
-            $followingUserIds = $user->following()->select('users.id');
-            $followedTagIds = $user->followedTags()->select('tags.id');
+            $followingUserIds = $user->following()->pluck('users.id')->all();
+            $followedArtistIds = $user->followingArtists()->pluck('artists.id')->all();
+            $followedTagIds = $user->followedTags()->pluck('tags.id')->all();
+            $followedCollectionPostIds = DB::table('collection_items')
+                ->whereIn('collection_id', $user->followingCollections()->pluck('collections.id'))
+                ->pluck('post_id')
+                ->unique()
+                ->all();
 
-            $query->where('user_id', '!=', $user->id)
-                ->where(function ($q) use ($followingUserIds, $followedTagIds) {
-                    $q->whereIn('user_id', $followingUserIds)
-                        ->orWhereHas('tags', function ($tq) use ($followedTagIds) {
-                        $tq->whereIn('tags.id', $followedTagIds);
-                    });
+            $query->where('user_id', '!=', $user->id);
+
+            if ($this->followingSubFilter === 'users') {
+                $query->whereIn('user_id', $followingUserIds ?: [0]);
+            } elseif ($this->followingSubFilter === 'artists') {
+                $query->whereIn('artist_id', $followedArtistIds ?: [0]);
+            } elseif ($this->followingSubFilter === 'tags') {
+                $query->whereHas('tags', fn ($q) => $q->whereIn('tags.id', $followedTagIds ?: [0]));
+            } elseif ($this->followingSubFilter === 'collections') {
+                $query->whereIn('id', $followedCollectionPostIds ?: [0]);
+            } else {
+                // All: Creators OR Artists OR Tags OR Collections
+                $query->where(function ($q) use ($followingUserIds, $followedArtistIds, $followedTagIds, $followedCollectionPostIds) {
+                    if ($followingUserIds !== []) {
+                        $q->whereIn('user_id', $followingUserIds);
+                    }
+                    if ($followedArtistIds !== []) {
+                        $q->orWhereIn('artist_id', $followedArtistIds);
+                    }
+                    if ($followedTagIds !== []) {
+                        $q->orWhereHas('tags', fn ($tq) => $tq->whereIn('tags.id', $followedTagIds));
+                    }
+                    if ($followedCollectionPostIds !== []) {
+                        $q->orWhereIn('id', $followedCollectionPostIds);
+                    }
                 });
+            }
+
+            // Following is chronological (newest) by default as requested!
+            if ($this->followingSort === 'popular' || $this->followingSort === 'most_liked') {
+                $query->orderByDesc('likes_count');
+            } else {
+                $query->latest();
+            }
         } elseif ($this->activeTab === 'for-you') {
             $preferredTagIds = collect();
 
@@ -334,11 +423,15 @@ new class extends Component
             if ($preferredTagIds->isNotEmpty()) {
                 $query->whereHas('tags', fn ($tags) => $tags->whereIn('tags.id', $preferredTagIds))
                     ->withCount(['tags as recommendation_score' => fn ($tags) => $tags->whereIn('tags.id', $preferredTagIds)])
-                    ->orderByDesc('recommendation_score');
+                    ->orderByDesc('recommendation_score')
+                    ->orderByDesc('likes_count');
             } else {
                 // Give new users a useful discovery feed while they build preferences.
                 $query->orderByDesc('likes_count');
             }
+        } else {
+            // Latest tab: pure chronological site-wide
+            $query->latest();
         }
 
         // Multi-Tag Filter (Booru standard: artwork must have ALL selected tags)
@@ -375,6 +468,31 @@ new class extends Component
             $query->where('is_nsfw', true);
         }
 
+        // Media Type Filter (all, image, gif, video, albums)
+        if ($this->mediaTypeFilter === 'image') {
+            $query->where('media_type', 'image')->where('media_count', 1);
+        } elseif ($this->mediaTypeFilter === 'gif') {
+            $query->where('media_type', 'gif');
+        } elseif ($this->mediaTypeFilter === 'video') {
+            $query->where('media_type', 'video');
+        } elseif ($this->mediaTypeFilter === 'albums') {
+            $query->where('media_count', '>', 1);
+        }
+
+        // Video Duration Filter (all, short <30s, medium 30s-180s, long >180s)
+        if ($this->videoDurationFilter !== 'all') {
+            $query->whereHas('media', function ($mq) {
+                $mq->where('media_type', 'video')->whereNotNull('duration');
+                if ($this->videoDurationFilter === 'short') {
+                    $mq->where('duration', '<', 30);
+                } elseif ($this->videoDurationFilter === 'medium') {
+                    $mq->whereBetween('duration', [30, 180]);
+                } elseif ($this->videoDurationFilter === 'long') {
+                    $mq->where('duration', '>', 180);
+                }
+            });
+        }
+
         // Score / Likes Filter (score:>=10)
         if ($this->minScore !== null && $this->minScore > 0) {
             $query->where('likes_count', '>=', $this->minScore);
@@ -400,8 +518,14 @@ new class extends Component
             } elseif ($this->timeRange === 'week') {
                 $query->where('created_at', '>=', now()->subWeek());
             }
-            $query->orderBy('likes_count', 'desc');
-        } else {
+            $query->orderByDesc('likes_count');
+        } elseif ($this->sortMode === 'oldest') {
+            $query->oldest();
+        } elseif ($this->sortMode === 'most_viewed') {
+            $query->orderByDesc('views_count');
+        } elseif ($this->sortMode === 'random') {
+            $query->inRandomOrder();
+        } elseif ($this->sortMode === 'latest') {
             $query->latest();
         }
 
@@ -435,7 +559,7 @@ new class extends Component
 };
 ?>
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 w-full min-w-0">
+<div class="max-w-[2400px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-5 sm:space-y-6 w-full min-w-0">
     <!-- Top Search & Sort Header -->
     <div class="space-y-4 w-full min-w-0">
         <!-- Search & Control Bar (Spec: Sits above all tabs and applies within the current tab) -->
@@ -603,8 +727,74 @@ new class extends Component
                 </button>
             </div>
 
-            <!-- Right Controls: Sort Mode & Grid Layout Toggle -->
-            <div class="flex items-center gap-2 shrink-0 justify-end">
+            <!-- Right Controls: Media Filter Dropdown, Sort Dropdown & Grid Layout Toggle -->
+            <div class="flex items-center gap-2 shrink-0 justify-end flex-wrap sm:flex-nowrap">
+                <!-- Media Filter Dropdown (Compact & Mobile/Tablet friendly) -->
+                <div class="relative" x-data="{ mediaOpen: false }">
+                    <button @click="mediaOpen = !mediaOpen" 
+                            class="flex items-center gap-2 px-3.5 py-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-elevated)] transition text-xs sm:text-sm font-semibold text-[var(--text-main)]"
+                            title="Filter by Media Format and Video Length">
+                        <span class="text-sm">
+                            @if($mediaTypeFilter === 'image') 🖼️ @elseif($mediaTypeFilter === 'gif') 🎞️ @elseif($mediaTypeFilter === 'video') 🎥 @elseif($mediaTypeFilter === 'albums') 📚 @else 🎬 @endif
+                        </span>
+                        <span>
+                            @if($mediaTypeFilter === 'image') Images @elseif($mediaTypeFilter === 'gif') GIFs @elseif($mediaTypeFilter === 'video') Videos @elseif($mediaTypeFilter === 'albums') Albums @else Media @endif
+                        </span>
+                        @if($videoDurationFilter !== 'all')
+                            <span class="px-1.5 py-0.5 rounded-md text-[10px] bg-sky-500/20 text-sky-400 font-bold border border-sky-500/30">
+                                {{ ucfirst($videoDurationFilter) }}
+                            </span>
+                        @endif
+                        <svg class="w-3.5 h-3.5 opacity-60 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+
+                    <div x-show="mediaOpen" 
+                         @click.outside="mediaOpen = false"
+                         x-cloak
+                         class="absolute right-0 mt-2 w-56 p-2 rounded-2xl glass-panel shadow-2xl border border-[var(--border-medium)] z-40 space-y-1">
+                        <div class="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)]">Media Format</div>
+                        <button wire:click="setMediaTypeFilter('all'); mediaOpen = false;" 
+                                class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold {{ $mediaTypeFilter === 'all' ? 'accent-bg text-white' : 'hover:bg-[var(--bg-surface-elevated)]' }}">
+                            <span>🎬 All Media Formats</span>
+                        </button>
+                        <button wire:click="setMediaTypeFilter('image'); mediaOpen = false;" 
+                                class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold {{ $mediaTypeFilter === 'image' ? 'accent-bg text-white' : 'hover:bg-[var(--bg-surface-elevated)]' }}">
+                            <span>🖼️ Images Only</span>
+                        </button>
+                        <button wire:click="setMediaTypeFilter('gif'); mediaOpen = false;" 
+                                class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold {{ $mediaTypeFilter === 'gif' ? 'accent-bg text-white' : 'hover:bg-[var(--bg-surface-elevated)]' }}">
+                            <span>🎞️ Animated GIFs</span>
+                        </button>
+                        <button wire:click="setMediaTypeFilter('video'); mediaOpen = false;" 
+                                class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold {{ $mediaTypeFilter === 'video' ? 'accent-bg text-white' : 'hover:bg-[var(--bg-surface-elevated)]' }}">
+                            <span>🎥 Video Clips</span>
+                        </button>
+                        <button wire:click="setMediaTypeFilter('albums'); mediaOpen = false;" 
+                                class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold {{ $mediaTypeFilter === 'albums' ? 'accent-bg text-white' : 'hover:bg-[var(--bg-surface-elevated)]' }}">
+                            <span>📚 Albums / Multi-Image</span>
+                        </button>
+
+                        <div class="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] pt-2 border-t border-[var(--border-subtle)]">Video Length</div>
+                        <button wire:click="setVideoDurationFilter('all'); mediaOpen = false;" 
+                                class="w-full text-left px-3 py-1.5 rounded-xl text-xs {{ $videoDurationFilter === 'all' ? 'bg-white/10 text-[var(--text-main)] font-bold' : 'hover:bg-[var(--bg-surface-elevated)]' }}">
+                            Any Duration
+                        </button>
+                        <button wire:click="setVideoDurationFilter('short'); mediaOpen = false;" 
+                                class="w-full text-left px-3 py-1.5 rounded-xl text-xs {{ $videoDurationFilter === 'short' ? 'bg-sky-500/20 text-sky-400 font-bold' : 'hover:bg-[var(--bg-surface-elevated)]' }}">
+                            ⚡ Shorts (&lt; 30 sec)
+                        </button>
+                        <button wire:click="setVideoDurationFilter('medium'); mediaOpen = false;" 
+                                class="w-full text-left px-3 py-1.5 rounded-xl text-xs {{ $videoDurationFilter === 'medium' ? 'bg-indigo-500/20 text-indigo-400 font-bold' : 'hover:bg-[var(--bg-surface-elevated)]' }}">
+                            ⏱️ Medium (30s – 3 min)
+                        </button>
+                        <button wire:click="setVideoDurationFilter('long'); mediaOpen = false;" 
+                                class="w-full text-left px-3 py-1.5 rounded-xl text-xs {{ $videoDurationFilter === 'long' ? 'bg-purple-500/20 text-purple-400 font-bold' : 'hover:bg-[var(--bg-surface-elevated)]' }}">
+                            🎬 Extended (&gt; 3 min)
+                        </button>
+                    </div>
+                </div>
                 <!-- Sort Dropdown -->
                 <div class="relative" x-data="{ sortOpen: false }">
                     <button @click="sortOpen = !sortOpen" 
@@ -612,7 +802,19 @@ new class extends Component
                         <svg class="w-4 h-4 accent-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"></path>
                         </svg>
-                        <span>{{ $sortMode === 'popular' ? 'Popular (' . ucfirst($timeRange) . ')' : 'Latest' }}</span>
+                        <span>
+                            @if($sortMode === 'popular')
+                                Popular ({{ ucfirst($timeRange) }})
+                            @elseif($sortMode === 'oldest')
+                                Oldest First
+                            @elseif($sortMode === 'most_viewed')
+                                Most Viewed
+                            @elseif($sortMode === 'random')
+                                Random Shuffle
+                            @else
+                                Newest (Latest)
+                            @endif
+                        </span>
                         <svg class="w-3.5 h-3.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                         </svg>
@@ -621,12 +823,24 @@ new class extends Component
                     <div x-show="sortOpen" 
                          @click.outside="sortOpen = false"
                          x-cloak
-                         class="absolute right-0 mt-2 w-48 p-2 rounded-2xl glass-panel shadow-2xl border border-[var(--border-medium)] z-30 space-y-1">
+                         class="absolute right-0 mt-2 w-52 p-2 rounded-2xl glass-panel shadow-2xl border border-[var(--border-medium)] z-30 space-y-1">
                         <button wire:click="setSort('latest'); sortOpen = false;" 
                                 class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold {{ $sortMode === 'latest' ? 'accent-bg text-white' : 'hover:bg-[var(--bg-surface-elevated)]' }}">
                             Strict Chronological (Latest)
                         </button>
-                        <div class="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)]">Popular Range</div>
+                        <button wire:click="setSort('oldest'); sortOpen = false;" 
+                                class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold {{ $sortMode === 'oldest' ? 'accent-bg text-white' : 'hover:bg-[var(--bg-surface-elevated)]' }}">
+                            Oldest First
+                        </button>
+                        <button wire:click="setSort('most_viewed'); sortOpen = false;" 
+                                class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold {{ $sortMode === 'most_viewed' ? 'accent-bg text-white' : 'hover:bg-[var(--bg-surface-elevated)]' }}">
+                            Most Viewed
+                        </button>
+                        <button wire:click="setSort('random'); sortOpen = false;" 
+                                class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold {{ $sortMode === 'random' ? 'accent-bg text-white' : 'hover:bg-[var(--bg-surface-elevated)]' }}">
+                            🎲 Random Shuffle
+                        </button>
+                        <div class="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)] pt-1 border-t border-[var(--border-subtle)]">Popular Range</div>
                         <button wire:click="setSort('popular', 'today'); sortOpen = false;" 
                                 class="w-full text-left px-3 py-1.5 rounded-xl text-xs {{ $sortMode === 'popular' && $timeRange === 'today' ? 'accent-bg text-white font-bold' : 'hover:bg-[var(--bg-surface-elevated)]' }}">
                             Popular Today
@@ -661,22 +875,22 @@ new class extends Component
             </div>
         </div>
 
-        <!-- Gallery Tabs (Spec: Latest, Following, For You; logged-out sees Latest and For You only) -->
-        <div class="flex items-center justify-between border-b border-[var(--border-subtle)] pb-1">
-            <div class="flex items-center gap-1 sm:gap-2">
-                <!-- Latest Tab -->
-                <button wire:click="setTab('latest')" 
-                        class="relative px-4 py-3 font-bold text-sm transition-colors {{ $activeTab === 'latest' ? 'text-[var(--text-main)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]' }}">
-                    <span>Latest</span>
-                    @if($activeTab === 'latest')
+        <!-- Gallery Tabs: For You (Discovery), Following (User-controlled), Latest (Chronological) -->
+        <div class="flex flex-col sm:flex-row items-center justify-center border-b border-[var(--border-subtle)] gap-2 sm:gap-4 pb-1">
+            <div class="flex items-center justify-center gap-1 sm:gap-2">
+                <!-- For You Tab -->
+                <button wire:click="setTab('for-you')" 
+                        class="relative px-4 py-3 font-bold text-sm transition-colors {{ $activeTab === 'for-you' ? 'text-[var(--text-main)] font-black' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]' }}">
+                    <span>For You</span>
+                    @if($activeTab === 'for-you')
                         <div class="absolute bottom-0 left-0 right-0 h-1 accent-bg rounded-t-full"></div>
                     @endif
                 </button>
 
-                <!-- Following Tab (Hidden for logged-out visitors) -->
+                <!-- Following Tab -->
                 @if(Auth::check())
                     <button wire:click="setTab('following')" 
-                            class="relative px-4 py-3 font-bold text-sm transition-colors {{ $activeTab === 'following' ? 'text-[var(--text-main)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]' }}">
+                            class="relative px-4 py-3 font-bold text-sm transition-colors {{ $activeTab === 'following' ? 'text-[var(--text-main)] font-black' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]' }}">
                         <span>Following</span>
                         @if($activeTab === 'following')
                             <div class="absolute bottom-0 left-0 right-0 h-1 accent-bg rounded-t-full"></div>
@@ -684,15 +898,28 @@ new class extends Component
                     </button>
                 @endif
 
-                <!-- For You Tab -->
-                <button wire:click="setTab('for-you')" 
-                        class="relative px-4 py-3 font-bold text-sm transition-colors {{ $activeTab === 'for-you' ? 'text-[var(--text-main)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]' }}">
-                    <span>For You</span>
-                    @if($activeTab === 'for-you')
+                <!-- Latest Tab -->
+                <button wire:click="setTab('latest')" 
+                        class="relative px-4 py-3 font-bold text-sm transition-colors {{ $activeTab === 'latest' ? 'text-[var(--text-main)] font-black' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]' }}">
+                    <span>Latest</span>
+                    @if($activeTab === 'latest')
                         <div class="absolute bottom-0 left-0 right-0 h-1 accent-bg rounded-t-full"></div>
                     @endif
                 </button>
             </div>
+
+            <!-- Following Sub-Filters (All | Creators | Artists | Tags | Collections) -->
+            @if($activeTab === 'following' && Auth::check())
+                <div class="flex items-center gap-1.5 pb-2 sm:pb-0 text-xs overflow-x-auto">
+                    <span class="text-[11px] font-bold text-[var(--text-dim)] uppercase mr-1">Filter:</span>
+                    <button wire:click="setFollowingSubFilter('all')" class="px-2.5 py-1 rounded-xl font-bold transition {{ $followingSubFilter === 'all' ? 'accent-bg text-white' : 'bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-main)]' }}">All</button>
+                    <button wire:click="setFollowingSubFilter('users')" class="px-2.5 py-1 rounded-xl font-bold transition {{ $followingSubFilter === 'users' ? 'accent-bg text-white' : 'bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-main)]' }}">Creators</button>
+                    <button wire:click="setFollowingSubFilter('artists')" class="px-2.5 py-1 rounded-xl font-bold transition {{ $followingSubFilter === 'artists' ? 'accent-bg text-white' : 'bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-main)]' }}">Artists</button>
+                    <button wire:click="setFollowingSubFilter('tags')" class="px-2.5 py-1 rounded-xl font-bold transition {{ $followingSubFilter === 'tags' ? 'accent-bg text-white' : 'bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-main)]' }}">Tags</button>
+                    <button wire:click="setFollowingSubFilter('collections')" class="px-2.5 py-1 rounded-xl font-bold transition {{ $followingSubFilter === 'collections' ? 'accent-bg text-white' : 'bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-main)]' }}">Collections</button>
+                </div>
+            @endif
+        </div>
 
             @if($activeTab === 'following')
                 <p class="mt-2 text-xs text-[var(--text-dim)]">Latest work from creators and tags you follow.</p>
@@ -716,7 +943,6 @@ new class extends Component
                     </button>
                 </div>
             @endif
-        </div>
 
         <!-- Popular / Featured Tags Quick Scroll Strip -->
         <div class="flex items-center gap-2 overflow-x-auto py-1 scrollbar-none w-full min-w-0">
@@ -759,7 +985,7 @@ new class extends Component
         </div>
     @else
         <!-- Grid Container: Dynamic Masonry vs Uniform Square -->
-        <div class="{{ $gridLayout === 'masonry' ? 'masonry-grid' : 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4' }}">
+        <div class="{{ $gridLayout === 'masonry' ? 'masonry-grid' : 'fluid-square-grid' }}">
             @foreach($posts as $post)
                 @php
                     $primaryMedia = $post->primaryMedia;
@@ -871,13 +1097,30 @@ new class extends Component
                     <!-- Post Footer Card -->
                     <div class="p-3.5 space-y-2.5 bg-[var(--bg-surface)]">
                         <div class="flex items-center justify-between gap-2">
-                            <!-- Author info -->
-                            <a href="{{ route('profile', $post->user->username) }}" class="flex items-center gap-2 min-w-0 group/author">
-                                <img src="{{ $post->user->avatar_url }}" class="w-6 h-6 rounded-full object-cover ring-1 ring-[var(--border-subtle)] shrink-0">
-                                <div class="min-w-0">
-                                    <div class="text-xs font-bold truncate group-hover/author:underline text-[var(--text-main)]">{{ $post->user->name }}</div>
-                                </div>
-                            </a>
+                            <!-- Author info & Artist attribution -->
+                            <div class="min-w-0 flex-1">
+                                <a href="{{ route('profile', $post->user->username) }}" class="flex items-center gap-2 min-w-0 group/author">
+                                    <img src="{{ $post->user->avatar_url }}" class="w-6 h-6 rounded-full object-cover ring-1 ring-[var(--border-subtle)] shrink-0">
+                                    <div class="min-w-0">
+                                        <div class="text-xs font-bold truncate group-hover/author:underline text-[var(--text-main)] flex items-center gap-1">
+                                            <span>{{ $post->user->name }}</span>
+                                            <span class="text-[10px] text-amber-400 font-normal">⚡{{ $post->user->reputation_score }}</span>
+                                        </div>
+                                    </div>
+                                </a>
+                                @if(!$post->is_original_creator && $post->artist_name)
+                                    <div class="text-[10px] text-amber-400/90 font-semibold truncate pl-8 mt-0.5">
+                                        🎨 Art by {{ $post->artist_name }}
+                                    </div>
+                                @endif
+                            </div>
+
+                            <!-- Not Interested (hides this post from the For You feed) -->
+                            <button wire:click="notInterested({{ $post->id }})"
+                                    title="Not interested — hide posts like this from your feed"
+                                    class="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold text-[var(--text-muted)] hover:text-amber-400 hover:bg-[var(--bg-surface-elevated)] transition">
+                                <span class="text-sm leading-none">🚫</span>
+                            </button>
 
                             <!-- Like Button (Spec: Likes only — no bookmarks, public, heart burst micro-animation) -->
                             <button wire:click="toggleLike({{ $post->id }})" 
@@ -892,10 +1135,15 @@ new class extends Component
                         <!-- Tag Pills (Danbooru Color Coding) -->
                         <div class="flex flex-wrap gap-1.5 pt-1">
                             @foreach($post->tags->take(4) as $tag)
-                                <button wire:click="filterByTag('{{ $tag->name }}')" 
-                                        class="px-2 py-0.5 rounded-lg text-[11px] font-medium border {{ $tag->getTypeBadgeClasses() }} transition">
-                                    #{{ $tag->name }}
-                                </button>
+                                <span class="inline-flex items-stretch overflow-hidden rounded-lg border {{ $tag->getTypeBadgeClasses() }}">
+                                    <button wire:click="filterByTag('{{ $tag->name }}')"
+                                            class="px-2 py-0.5 text-[11px] font-medium transition">
+                                        #{{ $tag->name }}
+                                    </button>
+                                    <button wire:click="muteTag('{{ $tag->name }}')"
+                                            title="Mute #{{ $tag->name }} — hide it from your feed"
+                                            class="px-1.5 py-0.5 text-[10px] opacity-50 transition hover:bg-black/20 hover:opacity-100">🔇</button>
+                                </span>
                             @endforeach
                             @if($post->tags->count() > 4)
                                 <a href="{{ route('post.detail', $post->id) }}" class="px-1.5 py-0.5 text-[10px] font-bold text-[var(--text-dim)] hover:text-[var(--text-main)]">

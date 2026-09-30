@@ -159,7 +159,7 @@ class MediaModerationAndOwnershipTest extends TestCase
         ]);
     }
 
-    public function test_admin_can_remove_a_reported_post_and_its_uploaded_file(): void
+    public function test_admin_removal_of_a_reported_post_is_reversible_until_purged(): void
     {
         Storage::fake('public');
         $reporter = $this->createUser('removal-reporter');
@@ -181,12 +181,53 @@ class MediaModerationAndOwnershipTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test('⚡admin-dashboard')
+            ->set('reportReasons', [$reportId => 'Copyrighted artwork reposted without permission.'])
             ->call('reviewContentReport', $reportId, 'remove')
             ->assertHasNoErrors();
 
-        $this->assertDatabaseMissing('posts', ['id' => $post->id]);
+        $this->assertSoftDeleted($post);
         $this->assertDatabaseHas('content_reports', ['id' => $reportId, 'status' => 'actioned']);
+        $this->assertSame('Copyrighted artwork reposted without permission.', Post::withTrashed()->find($post->id)->removal_reason);
+        Storage::disk('public')->assertExists('posts/reported-media.jpg');
+
+        Livewire::actingAs($admin)
+            ->test('⚡admin-dashboard')
+            ->call('restoreModerated', 'post', $post->id);
+
+        $this->assertNotSoftDeleted($post);
+        $this->assertNull(Post::find($post->id)->removal_reason);
+
+        Livewire::actingAs($admin)
+            ->test('⚡admin-dashboard')
+            ->call('purgeModerated', 'post', $post->id);
+
+        $this->assertDatabaseMissing('posts', ['id' => $post->id]);
         Storage::disk('public')->assertMissing('posts/reported-media.jpg');
+    }
+
+    public function test_removing_a_post_requires_a_moderation_reason(): void
+    {
+        $reporter = $this->createUser('no-reason-reporter');
+        $owner = $this->createUser('no-reason-author');
+        $admin = $this->createUser('no-reason-admin', true);
+        $post = $this->createPost($owner, 'Reported without a reason');
+        $reportId = DB::table('content_reports')->insertGetId([
+            'reporter_id' => $reporter->id,
+            'target_type' => 'post',
+            'target_id' => $post->id,
+            'reason' => 'spam',
+            'status' => 'pending',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test('⚡admin-dashboard')
+            ->call('reviewContentReport', $reportId, 'remove')
+            ->assertHasErrors('reportReasons.'.$reportId);
+
+        $this->assertNotSoftDeleted($post);
+        $this->assertDatabaseHas('content_reports', ['id' => $reportId, 'status' => 'pending']);
     }
 
     public function test_blocking_an_author_hides_posts_and_prevents_direct_messages(): void

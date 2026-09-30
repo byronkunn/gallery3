@@ -19,13 +19,35 @@ class Message extends Model
         'reactions',
         'is_read',
         'read_at',
+        'is_hidden',
+        'hidden_reason',
     ];
 
     protected $casts = [
         'reactions' => 'array',
         'is_read' => 'boolean',
         'read_at' => 'datetime',
+        'is_hidden' => 'boolean',
     ];
+
+    /**
+     * A new message always brings the thread back to both inboxes, even if one
+     * of the participants had removed it from their DM list.
+     */
+    protected static function booted(): void
+    {
+        static::created(function (Message $message): void {
+            $conversation = $message->conversation;
+            $sender = $message->sender;
+
+            if (! $conversation || ! $sender) {
+                return;
+            }
+
+            $conversation->unhideFor($sender);
+            $conversation->unhideFor($conversation->getOtherUser($sender));
+        });
+    }
 
     public function conversation(): BelongsTo
     {

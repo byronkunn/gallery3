@@ -4,6 +4,9 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\Post;
 use App\Models\User;
+use App\Support\ContentReports;
+use App\Support\Notifier;
+use App\Support\SiteSettings;
 use App\Support\SpamControls;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -43,6 +46,15 @@ new class extends Component
     public ?int $editingMessageId = null;
 
     public string $editingText = '';
+
+    // 5. Reporting a DM to site moderators
+    public bool $reportModalOpen = false;
+
+    public ?int $reportMessageId = null;
+
+    public string $reportReason = '';
+
+    public string $reportDetails = '';
 
     public function mount(?int $conversationId = null)
     {
@@ -197,6 +209,8 @@ new class extends Component
 
     public function startConversationWith(int $userId)
     {
+        abort_unless(SiteSettings::bool('site_dms_enabled'), 403, 'Direct messages are currently disabled.');
+
         $me = Auth::user();
         if (! $me || $me->id === $userId) {
             return;
@@ -248,8 +262,43 @@ new class extends Component
         $this->replyingToMessageId = null;
     }
 
+    public function openReportModal(int $messageId): void
+    {
+        $conversation = $this->conversationForCurrentUser($this->activeConversationId);
+        abort_unless($conversation, 404);
+        $message = Message::where('conversation_id', $conversation->id)->findOrFail($messageId);
+        abort_if($message->sender_id === Auth::id(), 422, 'You cannot report your own message.');
+
+        $this->reportMessageId = $message->id;
+        $this->reset('reportReason', 'reportDetails');
+        $this->reportModalOpen = true;
+    }
+
+    public function submitReport(): void
+    {
+        abort_unless(Auth::check(), 401);
+
+        $validated = $this->validate([
+            'reportReason' => ['required', 'string', 'max:80'],
+            'reportDetails' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $conversation = $this->conversationForCurrentUser($this->activeConversationId);
+        abort_unless($conversation, 404);
+        $message = Message::where('conversation_id', $conversation->id)->findOrFail((int) $this->reportMessageId);
+
+        $filed = ContentReports::file(Auth::user(), 'message', $message->id, $validated['reportReason'], $validated['reportDetails']);
+
+        $this->reset('reportReason', 'reportDetails');
+        $this->reportMessageId = null;
+        $this->reportModalOpen = false;
+        $this->dispatch('notify', $filed ? 'Report sent to the moderation team.' : 'You already reported this message.');
+    }
+
     public function sendMessage()
     {
+        abort_unless(SiteSettings::bool('site_dms_enabled'), 403, 'Direct messages are currently disabled.');
+
         $user = Auth::user();
         if (! $user || ! $this->activeConversationId) {
             return;
@@ -285,6 +334,8 @@ new class extends Component
         ]);
 
         $conversation->update(['last_message_at' => now()]);
+
+        Notifier::directMessage($msg, $user);
 
         // Dispatch WebSocket Broadcast Event
         broadcast(new \App\Events\MessageSent($msg))->toOthers();
@@ -350,7 +401,7 @@ new class extends Component
         $convQuery = Conversation::where(function ($q) use ($user) {
             $q->where('user_one_id', $user->id)
                 ->orWhere('user_two_id', $user->id);
-        })->with(['userOne', 'userTwo', 'latestMessage'])
+        })->with(['userOne', 'userTwo', 'visibleLatestMessage'])
             ->orderBy('last_message_at', 'desc');
 
         $blockedUserIds = $user->blockedUsers()->pluck('users.id')
@@ -386,15 +437,16 @@ new class extends Component
         $otherUser = $activeConversation ? $activeConversation->getOtherUser($user) : null;
 
         $messages = $activeConversation ? Message::where('conversation_id', $activeConversation->id)
+            ->where('is_hidden', false)
             ->with(['sender', 'replyTo.sender', 'sharedPost.primaryMedia', 'sharedPost.user'])
             ->oldest()
             ->get() : collect();
 
         $replyMessage = $this->replyingToMessageId && $activeConversation
-            ? Message::where('conversation_id', $activeConversation->id)->with('sender')->find($this->replyingToMessageId)
+            ? Message::where('conversation_id', $activeConversation->id)->where('is_hidden', false)->with('sender')->find($this->replyingToMessageId)
             : null;
         $pinnedMessage = $this->pinnedMessageId && $activeConversation
-            ? Message::where('conversation_id', $activeConversation->id)->with(['sender', 'sharedPost.primaryMedia'])->find($this->pinnedMessageId)
+            ? Message::where('conversation_id', $activeConversation->id)->where('is_hidden', false)->with(['sender', 'sharedPost.primaryMedia'])->find($this->pinnedMessageId)
             : null;
 
         $sharedPosts = $messages->filter(fn ($m) => $m->shared_post_id !== null)->pluck('sharedPost')->filter();
@@ -546,7 +598,7 @@ new class extends Component
                         @php
                             $other = $c->getOtherUser($currentUser);
                             $isActive = $activeConversationId === $c->id;
-                            $latestMsg = $c->latestMessage;
+                            $latestMsg = $c->visibleLatestMessage;
                             $unread = $c->unreadCountFor($currentUser);
                         @endphp
                         <button wire:click="selectConversation({{ $c->id }})" 
@@ -773,6 +825,10 @@ new class extends Component
                                             <button wire:click="deleteMessage({{ $msg->id }})" class="p-1 rounded-lg text-xs text-[var(--text-dim)] hover:text-rose-400 hover:bg-[var(--bg-surface-elevated)]" title="Delete for everyone">
                                                 🗑️
                                             </button>
+                                        @else
+                                            <button wire:click="openReportModal({{ $msg->id }})" class="p-1 rounded-lg text-xs text-[var(--text-dim)] hover:text-rose-400 hover:bg-[var(--bg-surface-elevated)]" title="Report this message">
+                                                🚩
+                                            </button>
                                         @endif
                                     </div>
                                 </div>
@@ -966,5 +1022,32 @@ new class extends Component
                 @endforeach
             </div>
         </div>
+    </div>
+
+    <!-- Report Direct Message Modal -->
+    <div x-show="$wire.reportModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" @click.self="$wire.set('reportModalOpen', false)">
+        <form wire:submit="submitReport" class="w-full max-w-lg rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-6 space-y-4">
+            <h2 class="text-lg font-black">Report direct message</h2>
+            <p class="text-xs text-[var(--text-dim)]">A site moderator will review this message.</p>
+            <label class="block text-xs font-bold">Reason
+                <select wire:model="reportReason" class="mt-1 w-full rounded-xl bg-[var(--bg-page)] border border-[var(--border-subtle)] p-3 text-sm">
+                    <option value="">Choose a reason</option>
+                    <option value="spam">Spam</option>
+                    <option value="harassment">Harassment or abuse</option>
+                    <option value="sexual_content">Unwanted sexual content</option>
+                    <option value="scam">Scam or fraud</option>
+                    <option value="other">Other policy concern</option>
+                </select>
+            </label>
+            @error('reportReason') <p class="text-xs text-rose-400">{{ $message }}</p> @enderror
+            <label class="block text-xs font-bold">Details
+                <textarea wire:model="reportDetails" rows="3" class="mt-1 w-full rounded-xl bg-[var(--bg-page)] border border-[var(--border-subtle)] p-3 text-sm"></textarea>
+            </label>
+            @error('reportDetails') <p class="text-xs text-rose-400">{{ $message }}</p> @enderror
+            <div class="flex justify-end gap-2">
+                <button type="button" wire:click="$set('reportModalOpen', false)" class="px-4 py-2 text-xs font-bold">Cancel</button>
+                <button class="rounded-xl accent-bg px-5 py-2 text-xs font-bold text-white">Send report</button>
+            </div>
+        </form>
     </div>
 </div>

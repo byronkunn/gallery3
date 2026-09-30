@@ -9,6 +9,8 @@ use App\Models\CollectionItem;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\Tag;
+use App\Support\ContentReports;
+use App\Support\Notifier;
 use App\Support\SpamControls;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -33,8 +35,13 @@ new class extends Component
     public string $editTitle = '';
     public string $editDescription = '';
     public string $editSourceUrl = '';
+    public bool $editIsOriginalCreator = true;
+    public string $editArtistName = '';
+    public string $editArtistUrl = '';
     public string $reportReason = '';
     public string $reportDetails = '';
+    public string $reportTargetType = 'post';
+    public ?int $reportTargetId = null;
 
     public function mount(int $postId)
     {
@@ -46,6 +53,9 @@ new class extends Component
         $this->editTitle = $post->title ?? '';
         $this->editDescription = $post->description ?? '';
         $this->editSourceUrl = $post->source_url ?? '';
+        $this->editIsOriginalCreator = (bool) $post->is_original_creator;
+        $this->editArtistName = $post->artist_name ?? '';
+        $this->editArtistUrl = $post->artist_url ?? '';
         $post->increment('views_count');
     }
 
@@ -58,12 +68,17 @@ new class extends Component
             'editTitle' => ['required', 'string', 'max:150'],
             'editDescription' => ['nullable', 'string', 'max:2000'],
             'editSourceUrl' => ['nullable', 'url', 'max:2048'],
+            'editArtistName' => ['nullable', 'string', 'max:100'],
+            'editArtistUrl' => ['nullable', 'url', 'max:2048'],
         ]);
 
         $post->update([
             'title' => $validated['editTitle'],
             'description' => $validated['editDescription'],
             'source_url' => $validated['editSourceUrl'] ?: null,
+            'is_original_creator' => $this->editIsOriginalCreator,
+            'artist_name' => ! $this->editIsOriginalCreator && filled(trim($this->editArtistName)) ? trim($this->editArtistName) : null,
+            'artist_url' => ! $this->editIsOriginalCreator && filled(trim($this->editArtistUrl)) ? trim($this->editArtistUrl) : null,
         ]);
 
         $this->editPostModalOpen = false;
@@ -100,7 +115,9 @@ new class extends Component
                 Collection::whereKey($item->collection_id)->where('items_count', '>', 0)->decrement('items_count');
             }
 
-            $post->delete();
+            // An owner deleting their own upload deletes it for good; admin
+            // removals stay reversible (see the admin moderation history).
+            $post->forceDelete();
         });
 
         Storage::disk('public')->delete($uploadedPaths->all());
@@ -126,6 +143,19 @@ new class extends Component
         }
     }
 
+    public function openReportModal(string $targetType = 'post', ?int $targetId = null): void
+    {
+        $this->reportTargetType = in_array($targetType, ContentReports::TARGET_TYPES, true) ? $targetType : 'post';
+        $this->reportTargetId = $targetId;
+        $this->reset('reportReason', 'reportDetails');
+        $this->reportModalOpen = true;
+    }
+
+    public function reportLabel(): string
+    {
+        return ContentReports::labelFor($this->reportTargetType);
+    }
+
     public function submitReport(): void
     {
         abort_unless(Auth::check(), 401);
@@ -133,25 +163,18 @@ new class extends Component
             'reportReason' => ['required', 'string', 'max:80'],
             'reportDetails' => ['nullable', 'string', 'max:1000'],
         ]);
-        $post = Post::findOrFail($this->postId);
-        abort_if($post->user_id === Auth::id(), 422);
 
-        $alreadyReported = DB::table('content_reports')->where('reporter_id', Auth::id())
-            ->where('target_type', 'post')->where('target_id', $post->id)->where('status', 'pending')->exists();
-        if ($alreadyReported) {
-            $this->dispatch('notify', 'You already reported this post.');
-            $this->reportModalOpen = false;
-            return;
-        }
+        $targetId = $this->reportTargetId ?? $this->postId;
+        $targetLabel = strtolower($this->reportLabel());
+        $filed = ContentReports::file(Auth::user(), $this->reportTargetType, $targetId, $validated['reportReason'], $validated['reportDetails']);
 
-        DB::table('content_reports')->insert([
-            'reporter_id' => Auth::id(), 'target_type' => 'post', 'target_id' => $post->id,
-            'reason' => $validated['reportReason'], 'details' => $validated['reportDetails'] ?: null,
-            'status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
-        ]);
         $this->reset('reportReason', 'reportDetails');
+        $this->reportTargetId = null;
+        $this->reportTargetType = 'post';
         $this->reportModalOpen = false;
-        $this->dispatch('notify', 'Report sent to the moderation team.');
+        $this->dispatch('notify', $filed
+            ? 'Report sent to the moderation team.'
+            : 'You already reported this '.$targetLabel.'.');
     }
 
     public function toggleLike()
@@ -168,10 +191,13 @@ new class extends Component
         if ($existing) {
             $existing->delete();
             $post->decrement('likes_count');
+            $post->user?->decrement('reputation_score', 2);
             $this->dispatch('notify', 'Removed like');
         } else {
             Like::create(['user_id' => $user->id, 'post_id' => $this->postId]);
             $post->increment('likes_count');
+            $post->user?->increment('reputation_score', 2);
+            Notifier::like($post, $user);
             $this->dispatch('notify', 'Liked post!');
         }
     }
@@ -191,6 +217,7 @@ new class extends Component
             $this->dispatch('notify', 'Unfollowed artist');
         } else {
             $user->following()->attach($authorId);
+            Notifier::follow(User::findOrFail($authorId), $user);
             $this->dispatch('notify', 'Followed artist!');
         }
     }
@@ -249,13 +276,19 @@ new class extends Component
         }
 
         $this->validate(['commentText' => 'required|string|min:2|max:1000']);
+
+        $post = Post::findOrFail($this->postId);
+        abort_if($post->comments_locked, 423, 'Comments are locked on this post.');
+
         SpamControls::enforce('comments', 8, 60, $this->commentText);
 
-        Comment::create([
+        $comment = Comment::create([
             'post_id' => $this->postId,
             'user_id' => Auth::id(),
             'content' => trim($this->commentText),
         ]);
+
+        Notifier::comment($comment, Auth::user());
 
         $this->commentText = '';
         $this->dispatch('notify', 'Comment posted!');
@@ -280,6 +313,7 @@ new class extends Component
                 'order' => $maxOrder + 1,
             ]);
             $coll->increment('items_count');
+            Notifier::collectionItemAdded($coll, Post::findOrFail($this->postId), Auth::user());
             $this->dispatch('notify', "Added to collection '{$coll->title}'");
         }
     }
@@ -314,8 +348,13 @@ new class extends Component
     {
         if (!Auth::check() || !$this->selectedConversationId) return;
 
-        $conv = Conversation::findOrFail($this->selectedConversationId);
-        
+        $conv = Conversation::where('id', $this->selectedConversationId)
+            ->where(function ($query): void {
+                $query->where('user_one_id', Auth::id())->orWhere('user_two_id', Auth::id());
+            })
+            ->first();
+        abort_unless($conv, 404);
+
         Message::create([
             'conversation_id' => $conv->id,
             'sender_id' => Auth::id(),
@@ -332,13 +371,13 @@ new class extends Component
 
     public function render()
     {
-        $post = Post::with(['user', 'media', 'tags', 'comments.user'])->findOrFail($this->postId);
+        $post = Post::with(['user', 'media', 'tags', 'comments' => fn ($query) => $query->where('is_hidden', false)->with('user')])->findOrFail($this->postId);
         $user = Auth::user();
         $isLiked = $post->isLikedBy($user);
         $isFollowingAuthor = $user ? $user->isFollowing($post->user) : false;
 
         $myCollections = $user ? Collection::where('user_id', $user->id)->with('items')->get() : collect();
-        $myConversations = $user ? Conversation::where('user_one_id', $user->id)->orWhere('user_two_id', $user->id)->with(['userOne', 'userTwo'])->get() : collect();
+        $myConversations = $user ? Conversation::query()->visibleFor($user)->with(['userOne', 'userTwo'])->get() : collect();
 
         $tagsByType = $post->tags->groupBy('type');
 
@@ -432,7 +471,7 @@ new class extends Component
                 <button wire:click="$set('editPostModalOpen', true)" class="px-3 py-2 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] text-xs font-bold">Edit post</button>
                 <button wire:click="deletePost" wire:confirm="Delete this post and its uploaded media?" class="px-3 py-2 rounded-xl border border-rose-500/30 text-rose-400 text-xs font-bold">Delete</button>
             @elseif(auth()->check())
-                <button wire:click="$set('reportModalOpen', true)" class="px-3 py-2 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] text-xs font-bold">Report</button>
+                <button wire:click="openReportModal('post')" class="px-3 py-2 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] text-xs font-bold">Report</button>
                 <button wire:click="toggleBlockAuthor" wire:confirm="Block this artist and hide their posts?" class="px-3 py-2 rounded-xl border border-rose-500/30 text-rose-400 text-xs font-bold">
                     {{ auth()->user()->blockedUsers()->whereKey($post->user_id)->exists() ? 'Unblock artist' : 'Block artist' }}
                 </button>
@@ -512,7 +551,7 @@ new class extends Component
                 </h3>
 
                 <!-- Add Comment Input -->
-                @if(Auth::check())
+                @if(Auth::check() && !$post->comments_locked)
                     <div class="flex items-start gap-3">
                         <img src="{{ Auth::user()->avatar_url }}" class="w-10 h-10 rounded-full object-cover ring-2 ring-[var(--border-subtle)] shrink-0">
                         <div class="flex-1 space-y-2">
@@ -528,9 +567,15 @@ new class extends Component
                             </div>
                         </div>
                     </div>
-                @else
+                @elseif(!Auth::check())
                     <div class="p-4 rounded-2xl bg-[var(--bg-surface-elevated)] text-center text-sm text-[var(--text-muted)]">
                         <a href="{{ route('login') }}" class="accent-text font-bold hover:underline">Log in</a> to join the discussion.
+                    </div>
+                @endif
+
+                @if($post->comments_locked)
+                    <div class="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-center text-sm font-semibold text-amber-300">
+                        🔒 Comments are locked on this post by a moderator.
                     </div>
                 @endif
 
@@ -547,7 +592,14 @@ new class extends Component
                                         {{ $comment->user->name }}
                                         <span class="text-[var(--text-dim)] font-normal ml-1">{{ '@' . $comment->user->username }}</span>
                                     </a>
-                                    <span class="text-[10px] text-[var(--text-dim)]">{{ $comment->created_at->diffForHumans() }}</span>
+                                    <div class="flex items-center gap-2 shrink-0">
+                                        <span class="text-[10px] text-[var(--text-dim)]">{{ $comment->created_at->diffForHumans() }}</span>
+                                        @if(auth()->check() && auth()->id() !== $comment->user_id)
+                                            <button wire:click="openReportModal('comment', {{ $comment->id }})"
+                                                    title="Report this comment"
+                                                    class="text-[10px] font-bold text-[var(--text-dim)] hover:text-rose-400 transition">Report</button>
+                                        @endif
+                                    </div>
                                 </div>
                                 <p class="text-sm text-[var(--text-main)] mt-1.5 leading-relaxed">{{ $comment->content }}</p>
                             </div>
@@ -592,8 +644,21 @@ new class extends Component
                     </div>
                 </div>
 
-                <!-- Source Link if available -->
-                @if($post->source_url)
+                <!-- Artist Attribution / Source -->
+                @if(!$post->is_original_creator && $post->artist_name)
+                    <div class="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 space-y-1">
+                        <div class="text-[10px] uppercase font-black tracking-wider text-amber-400">🎨 Original Artist Attribution</div>
+                        <div class="text-xs font-bold flex items-center justify-between gap-2">
+                            <span>Created by <strong>{{ $post->artist_name }}</strong></span>
+                            @if($post->artist_url)
+                                <a href="{{ $post->artist_url }}" target="_blank" rel="noopener" class="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-[11px] font-bold inline-flex items-center gap-1 transition shrink-0">
+                                    <span>Artist Page ↗</span>
+                                </a>
+                            @endif
+                        </div>
+                        <div class="text-[11px] opacity-75">Uploaded to gallery archive by @<span>{{ $post->user->username }}</span></div>
+                    </div>
+                @elseif($post->source_url)
                     <div class="flex items-center gap-2 text-xs">
                         <span class="text-[var(--text-dim)]">Source:</span>
                         <a href="{{ $post->source_url }}" target="_blank" rel="noopener" class="accent-text hover:underline truncate max-w-xs flex items-center gap-1">
@@ -620,6 +685,12 @@ new class extends Component
                                     @endif
                                 </div>
                                 <div class="text-xs text-[var(--text-dim)] truncate">{{ '@' . $post->user->username }}</div>
+                                <div class="flex items-center gap-1.5 mt-0.5">
+                                    <span class="px-2 py-0.2 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                        ⚡ {{ number_format($post->user->reputation_score) }} Rep
+                                    </span>
+                                    <span class="text-[10px] text-[var(--text-muted)] font-medium">{{ $post->user->reputation_title }}</span>
+                                </div>
                             </div>
                         </a>
 
@@ -810,13 +881,36 @@ new class extends Component
             @error('editDescription') <p class="text-xs text-rose-400">{{ $message }}</p> @enderror
             <label class="block text-xs font-bold">Source URL<input type="url" wire:model="editSourceUrl" class="mt-1 w-full rounded-xl bg-[var(--bg-page)] border border-[var(--border-subtle)] p-3 text-sm"></label>
             @error('editSourceUrl') <p class="text-xs text-rose-400">{{ $message }}</p> @enderror
+
+            <!-- Artist Attribution Edit -->
+            <div class="p-3 rounded-2xl bg-[var(--bg-page)] border border-[var(--border-subtle)] space-y-2">
+                <span class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider block">Creator Attribution</span>
+                <div class="flex items-center gap-2">
+                    <button type="button" wire:click="$set('editIsOriginalCreator', true)" class="px-3 py-1.5 rounded-xl text-xs font-bold border transition {{ $editIsOriginalCreator ? 'accent-bg text-white border-transparent' : 'border-[var(--border-subtle)] text-[var(--text-muted)]' }}">Original Creator</button>
+                    <button type="button" wire:click="$set('editIsOriginalCreator', false)" class="px-3 py-1.5 rounded-xl text-xs font-bold border transition {{ !$editIsOriginalCreator ? 'bg-amber-500 text-white border-transparent' : 'border-[var(--border-subtle)] text-[var(--text-muted)]' }}">Third-Party Artist</button>
+                </div>
+
+                @if(!$editIsOriginalCreator)
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+                        <div>
+                            <label class="text-[10px] font-bold text-[var(--text-dim)] uppercase">Artist Name</label>
+                            <input type="text" wire:model="editArtistName" placeholder="Artist Name / Handle" class="w-full mt-0.5 p-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-[var(--text-dim)] uppercase">Artist Website URL</label>
+                            <input type="url" wire:model="editArtistUrl" placeholder="https://..." class="w-full mt-0.5 p-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs">
+                        </div>
+                    </div>
+                @endif
+            </div>
+
             <div class="flex justify-end gap-2"><button type="button" wire:click="$set('editPostModalOpen', false)" class="px-4 py-2 text-xs font-bold">Cancel</button><button class="rounded-xl accent-bg px-5 py-2 text-xs font-bold text-white">Save changes</button></div>
         </form>
     </div>
 
     <div x-show="$wire.reportModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" @click.self="$wire.set('reportModalOpen', false)">
         <form wire:submit="submitReport" class="w-full max-w-lg rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-6 space-y-4">
-            <h2 class="text-lg font-black">Report post</h2>
+            <h2 class="text-lg font-black">Report {{ strtolower(\App\Support\ContentReports::labelFor($reportTargetType)) }}</h2>
             <label class="block text-xs font-bold">Reason<select wire:model="reportReason" class="mt-1 w-full rounded-xl bg-[var(--bg-page)] border border-[var(--border-subtle)] p-3 text-sm"><option value="">Choose a reason</option><option value="spam">Spam</option><option value="copyright">Copyright concern</option><option value="harassment">Harassment</option><option value="wrong_rating">Incorrect content rating</option><option value="other">Other policy concern</option></select></label>
             @error('reportReason') <p class="text-xs text-rose-400">{{ $message }}</p> @enderror
             <label class="block text-xs font-bold">Details<textarea wire:model="reportDetails" rows="3" class="mt-1 w-full rounded-xl bg-[var(--bg-page)] border border-[var(--border-subtle)] p-3 text-sm"></textarea></label>

@@ -41,8 +41,9 @@ class SiteRoutesAndComponentsTest extends TestCase
         // 3. Profile Page
         $this->get('/profile/kira_art')->assertStatus(200);
 
-        // 4. Messages Page
-        $this->actingAs($user)->get('/messages')->assertStatus(200);
+        // 4. Messages Page & Lounge DMs
+        $this->actingAs($user)->get('/messages')->assertRedirect(route('lounge.dms'));
+        $this->actingAs($user)->get('/lounge/dms')->assertStatus(200);
 
         // 5. Notifications Page
         $this->actingAs($user)->get('/notifications')->assertStatus(200);
@@ -124,6 +125,21 @@ class SiteRoutesAndComponentsTest extends TestCase
             'conversation_id' => $conv->id,
             'sender_id' => $user2->id,
         ]);
+    }
+
+    public function test_gallery_feed_media_type_duration_and_sort_filters()
+    {
+        Livewire::test('⚡gallery-feed')
+            ->set('mediaTypeFilter', 'video')
+            ->set('videoDurationFilter', 'short')
+            ->set('sortMode', 'oldest')
+            ->assertSet('mediaTypeFilter', 'video')
+            ->assertSet('videoDurationFilter', 'short')
+            ->assertSet('sortMode', 'oldest')
+            ->call('setMediaTypeFilter', 'albums')
+            ->assertSet('mediaTypeFilter', 'albums')
+            ->call('setSort', 'most_viewed')
+            ->assertSet('sortMode', 'most_viewed');
     }
 
     /**

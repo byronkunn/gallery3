@@ -7,13 +7,19 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Post extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'user_id',
+        'artist_id',
+        'is_artist_upload',
+        'is_original_creator',
+        'artist_name',
+        'artist_url',
         'title',
         'description',
         'media_type',
@@ -22,12 +28,17 @@ class Post extends Model
         'likes_count',
         'is_nsfw',
         'is_featured',
+        'comments_locked',
         'source_url',
+        'removal_reason',
     ];
 
     protected $casts = [
+        'is_artist_upload' => 'boolean',
+        'is_original_creator' => 'boolean',
         'is_nsfw' => 'boolean',
         'is_featured' => 'boolean',
+        'comments_locked' => 'boolean',
         'media_count' => 'integer',
         'views_count' => 'integer',
         'likes_count' => 'integer',
@@ -36,6 +47,11 @@ class Post extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function artist(): BelongsTo
+    {
+        return $this->belongsTo(Artist::class);
     }
 
     public function media(): HasMany

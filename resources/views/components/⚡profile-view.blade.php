@@ -6,6 +6,8 @@ use App\Models\Message;
 use App\Models\Pool;
 use App\Models\Post;
 use App\Models\User;
+use App\Support\ContentReports;
+use App\Support\Notifier;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -21,6 +23,12 @@ new class extends Component
     public bool $editModalOpen = false;
 
     public bool $followModalOpen = false;
+
+    public bool $reportModalOpen = false;
+
+    public string $reportReason = '';
+
+    public string $reportDetails = '';
 
     public string $followModalTab = 'followers'; // 'followers' or 'following'
 
@@ -109,8 +117,26 @@ new class extends Component
             $this->dispatch('notify', "Unfollowed @{$targetUser->username}");
         } else {
             $currentUser->following()->attach($targetUser->id);
+            Notifier::follow($targetUser, $currentUser);
             $this->dispatch('notify', "Followed @{$targetUser->username}");
         }
+    }
+
+    public function submitUserReport(): void
+    {
+        abort_unless(Auth::check(), 401);
+        $targetUser = User::where('username', $this->username)->firstOrFail();
+
+        $validated = $this->validate([
+            'reportReason' => ['required', 'string', 'max:80'],
+            'reportDetails' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $filed = ContentReports::file(Auth::user(), 'user', $targetUser->id, $validated['reportReason'], $validated['reportDetails']);
+
+        $this->reset('reportReason', 'reportDetails');
+        $this->reportModalOpen = false;
+        $this->dispatch('notify', $filed ? 'Report sent to the moderation team.' : 'You already reported this account.');
     }
 
     public function toggleBlockUser(): mixed
@@ -140,7 +166,7 @@ new class extends Component
         }
 
         $currentUser = Auth::user();
-        if (! \Illuminate\Support\Facades\Cache::get('site_global_commissions', true)) {
+        if (! \App\Support\SiteSettings::bool('site_global_commissions')) {
             $this->dispatch('notify', 'Commission inquiries are currently paused.');
 
             return;
@@ -210,6 +236,7 @@ new class extends Component
             $this->dispatch('notify', "Unfollowed @{$targetUser->username}");
         } else {
             $currentUser->following()->attach($targetUser->id);
+            Notifier::follow($targetUser, $currentUser);
             $this->dispatch('notify', "Followed @{$targetUser->username}");
         }
     }
@@ -357,7 +384,7 @@ new class extends Component
                     </button>
                 @else
                     @if(Auth::check())
-                        @if(!$isMe && \Illuminate\Support\Facades\Cache::get('site_global_commissions', true) && in_array($profileUser->commission_status, ['Open', 'Waitlist']))
+                        @if(!$isMe && \App\Support\SiteSettings::bool('site_global_commissions') && in_array($profileUser->commission_status, ['Open', 'Waitlist']))
                             <button wire:click="$set('commissionModalOpen', true)" 
                                     class="px-5 py-2.5 rounded-2xl bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30 text-sm font-bold shadow transition flex items-center gap-2">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -366,7 +393,7 @@ new class extends Component
                                 <span>Request Commission</span>
                             </button>
                         @endif
-                        <a href="{{ route('messages') }}" 
+                        <a href="{{ route('lounge.dms') }}" 
                            class="p-2.5 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-elevated)] transition text-[var(--text-muted)] hover:text-[var(--text-main)]"
                            title="Direct Message">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -379,6 +406,9 @@ new class extends Component
                         </button>
                         <button wire:click="toggleBlockUser" wire:confirm="Block this artist and hide their profile and posts?" class="rounded-2xl border border-rose-500/30 px-4 py-2.5 text-sm font-bold text-rose-400">
                             {{ Auth::user()->blockedUsers()->whereKey($profileUser->id)->exists() ? 'Unblock' : 'Block' }}
+                        </button>
+                        <button wire:click="$set('reportModalOpen', true)" class="rounded-2xl border border-[var(--border-subtle)] px-4 py-2.5 text-sm font-bold text-[var(--text-muted)] hover:text-[var(--text-main)] transition">
+                            Report
                         </button>
                     @endif
                 @endif
@@ -436,8 +466,14 @@ new class extends Component
                 </span>
             </div>
 
-            <!-- Followers & Following Stats (Twitter style with modal triggers) -->
-            <div class="flex items-center gap-6 text-sm pt-2">
+            <!-- Reputation, Followers & Following Stats (Twitter style with modal triggers) -->
+            <div class="flex items-center gap-4 text-sm pt-2 flex-wrap">
+                <div class="flex items-center gap-1.5 px-3 py-1 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold text-xs">
+                    <span class="text-sm">⚡</span>
+                    <span>{{ number_format($profileUser->reputation_score) }} Rep</span>
+                    <span class="text-amber-200/80 font-medium ml-1">({{ $profileUser->reputation_title }})</span>
+                </div>
+
                 <button wire:click="openFollowModal('following')" type="button" class="group flex items-center gap-1 hover:opacity-80 transition cursor-pointer">
                     <span class="font-extrabold text-[var(--text-main)] group-hover:underline">{{ $profileUser->following()->count() }}</span>
                     <span class="text-[var(--text-dim)] ml-0.5">Following</span>
@@ -843,5 +879,31 @@ new class extends Component
                 </button>
             </div>
         </div>
+    </div>
+
+    <div x-show="$wire.reportModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" @click.self="$wire.set('reportModalOpen', false)">
+        <form wire:submit="submitUserReport" class="w-full max-w-lg rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-6 space-y-4">
+            <h2 class="text-lg font-black">Report account</h2>
+            <p class="text-xs text-[var(--text-dim)]">Reports go to the site moderation queue. False reports may be reviewed by staff.</p>
+            <label class="block text-xs font-bold">Reason
+                <select wire:model="reportReason" class="mt-1 w-full rounded-xl bg-[var(--bg-page)] border border-[var(--border-subtle)] p-3 text-sm">
+                    <option value="">Choose a reason</option>
+                    <option value="spam">Spam</option>
+                    <option value="harassment">Harassment or abuse</option>
+                    <option value="impersonation">Impersonation</option>
+                    <option value="ban_evasion">Ban evasion</option>
+                    <option value="other">Other policy concern</option>
+                </select>
+            </label>
+            @error('reportReason') <p class="text-xs text-rose-400">{{ $message }}</p> @enderror
+            <label class="block text-xs font-bold">Details
+                <textarea wire:model="reportDetails" rows="3" class="mt-1 w-full rounded-xl bg-[var(--bg-page)] border border-[var(--border-subtle)] p-3 text-sm"></textarea>
+            </label>
+            @error('reportDetails') <p class="text-xs text-rose-400">{{ $message }}</p> @enderror
+            <div class="flex justify-end gap-2">
+                <button type="button" wire:click="$set('reportModalOpen', false)" class="px-4 py-2 text-xs font-bold">Cancel</button>
+                <button class="rounded-xl accent-bg px-5 py-2 text-xs font-bold text-white">Send report</button>
+            </div>
+        </form>
     </div>
 </div>

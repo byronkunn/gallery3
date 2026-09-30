@@ -165,25 +165,84 @@ body {
     word-break: break-word;
 }
 
-/* Masonry support - cross-browser bulletproof */
+/* Masonry support - Responsive Breakpoints Specification (Phone, Tablet, Laptop, Desktop, 4K Ultrawide) */
 .masonry-grid {
-    column-count: 1;
-    column-gap: 1.25rem;
+    column-count: 2;
+    column-gap: 0.75rem;
 }
 @media (min-width: 640px) {
-    .masonry-grid { column-count: 2; }
+    .masonry-grid {
+        column-count: 3;
+        column-gap: 1rem;
+    }
+}
+@media (min-width: 768px) {
+    .masonry-grid {
+        column-count: 3;
+        column-gap: 1.25rem;
+    }
 }
 @media (min-width: 1024px) {
-    .masonry-grid { column-count: 3; }
+    .masonry-grid {
+        column-count: 4;
+        column-gap: 1.25rem;
+    }
 }
-@media (min-width: 1440px) {
-    .masonry-grid { column-count: 4; }
+@media (min-width: 1280px) {
+    .masonry-grid {
+        column-count: 5;
+    }
+}
+@media (min-width: 1536px) {
+    .masonry-grid {
+        column-count: 6;
+    }
+}
+@media (min-width: 1920px) {
+    .masonry-grid {
+        column-count: 7;
+    }
+}
+@media (min-width: 2560px) {
+    .masonry-grid {
+        column-count: 9;
+    }
 }
 .masonry-item {
     break-inside: avoid-column;
     display: inline-block;
     width: 100%;
-    margin-bottom: 1.25rem;
+    margin-bottom: 0.75rem;
+}
+@media (min-width: 640px) {
+    .masonry-item {
+        margin-bottom: 1.25rem;
+    }
+}
+
+/* Fluid Auto-Fill Square Grid Layout */
+.fluid-square-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+@media (min-width: 480px) {
+    .fluid-square-grid {
+        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+        gap: 1rem;
+    }
+}
+@media (min-width: 768px) {
+    .fluid-square-grid {
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 1.25rem;
+    }
+}
+@media (min-width: 1024px) {
+    .fluid-square-grid {
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 1.25rem;
+    }
 }
 
 /* Responsive Navigation & Layout Rules (Twitter/X style) */

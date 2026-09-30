@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -22,11 +23,13 @@ class User extends Authenticatable
         'bio',
         'website',
         'is_artist',
+        'reputation_score',
         'is_admin',
         'is_banned',
         'suspended_until',
         'suspension_reason',
         'last_active_at',
+        'approved_at',
         'commission_status',
         'theme_mode',
         'theme_palette',
@@ -47,6 +50,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_artist' => 'boolean',
+            'reputation_score' => 'integer',
             'is_admin' => 'boolean',
             'is_banned' => 'boolean',
             'blur_nsfw' => 'boolean',
@@ -54,7 +58,22 @@ class User extends Authenticatable
             'reduced_motion' => 'boolean',
             'last_active_at' => 'datetime',
             'suspended_until' => 'datetime',
+            'approved_at' => 'datetime',
         ];
+    }
+
+    public function getReputationTitleAttribute(): string
+    {
+        $score = (int) $this->reputation_score;
+
+        return match (true) {
+            $score >= 1000 => 'Master Contributor ⭐',
+            $score >= 500 => 'Grand Curator 💎',
+            $score >= 250 => 'Senior Contributor 🏆',
+            $score >= 100 => 'Active Contributor 🎨',
+            $score >= 30 => 'Regular Member 🌟',
+            default => 'Novice Member ☘️',
+        };
     }
 
     public function posts(): HasMany
@@ -110,6 +129,31 @@ class User extends Authenticatable
     public function blacklistedTags(): BelongsToMany
     {
         return $this->belongsToMany(Tag::class, 'user_tag_blacklists')->withTimestamps();
+    }
+
+    public function mutedTags(): BelongsToMany
+    {
+        return $this->belongsToMany(Tag::class, 'user_muted_tags')->withTimestamps();
+    }
+
+    public function dislikedPosts(): BelongsToMany
+    {
+        return $this->belongsToMany(Post::class, 'user_disliked_posts')->withTimestamps();
+    }
+
+    public function claimedArtist(): BelongsTo
+    {
+        return $this->belongsTo(Artist::class, 'claimed_artist_id');
+    }
+
+    public function followingArtists(): BelongsToMany
+    {
+        return $this->belongsToMany(Artist::class, 'artist_follows')->withTimestamps();
+    }
+
+    public function isFollowingArtist(Artist $artist): bool
+    {
+        return $this->followingArtists()->where('artist_id', $artist->id)->exists();
     }
 
     public function followingCollections(): BelongsToMany
@@ -175,5 +219,14 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return (bool) $this->is_admin;
+    }
+
+    /**
+     * Accounts created while registration approval is on start unapproved and
+     * are read-only until an administrator lets them in.
+     */
+    public function isApproved(): bool
+    {
+        return $this->is_admin || ! is_null($this->approved_at);
     }
 }

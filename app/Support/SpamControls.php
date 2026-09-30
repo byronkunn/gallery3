@@ -12,11 +12,12 @@ class SpamControls
 {
     public static function enforce(string $action, int $defaultLimit, int $decaySeconds, ?string $content = null, int $weight = 1): void
     {
-        if (! Cache::get('site_spam_controls_enabled', true)) {
+        if (! SiteSettings::bool('site_spam_controls_enabled')) {
             return;
         }
 
-        $maximumAttempts = max(1, (int) Cache::get('site_spam_'.$action.'_limit', $defaultLimit));
+        $configuredLimit = SiteSettings::get('site_spam_'.$action.'_limit');
+        $maximumAttempts = max(1, (int) ($configuredLimit ?? $defaultLimit));
         $identity = Auth::id() ? 'user:'.Auth::id() : 'ip:'.request()->ip();
         $key = 'spam-control:'.$action.':'.hash('sha256', $identity);
 
@@ -30,7 +31,7 @@ class SpamControls
         if (filled($content)) {
             $normalizedContent = Str::of($content)->lower()->squish()->toString();
             $fingerprint = hash('sha256', $identity.'|'.$action.'|'.$normalizedContent);
-            $window = max(15, (int) Cache::get('site_spam_duplicate_window', 45));
+            $window = max(15, SiteSettings::int('site_spam_duplicate_window'));
 
             if (! Cache::add('spam-duplicate:'.$fingerprint, true, now()->addSeconds($window))) {
                 abort(429, 'That looks like a duplicate. Please wait before posting it again.');

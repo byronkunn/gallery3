@@ -14,6 +14,7 @@ use App\Models\CommunityMessage;
 use App\Models\CommunityMessageReaction;
 use App\Models\CommunityRole;
 use App\Models\Conversation;
+use App\Support\ContentReports;
 use App\Support\LoungeFormatter;
 use App\Support\SpamControls;
 use Illuminate\Support\Carbon;
@@ -193,6 +194,9 @@ new class extends Component
     public ?int $reportTargetId = null;
 
     public string $reportTargetType = 'message';
+
+    // Reporting the whole community to site admins (not the in-server queue).
+    public bool $siteReportOpen = false;
 
     // ----------------------------------------------------------------- join
     public string $joinAnswer = '';
@@ -953,6 +957,27 @@ new class extends Component
         $this->redirect(route('lounge.explore'));
     }
 
+    /**
+     * Owners may permanently remove a community they created. Every related
+     * table (channels, messages, members, roles, invites, reports, logs, ...)
+     * cascades from the communities row.
+     */
+    public function deleteCommunity(): void
+    {
+        $community = $this->community();
+        abort_unless(Auth::check() && Auth::id() === $community->owner_id, 403);
+
+        $name = $community->name;
+
+        DB::transaction(function () use ($community): void {
+            $community->delete();
+        });
+
+        session()->flash('success', $name.' has been deleted.');
+
+        $this->redirect(route('lounge.explore'));
+    }
+
     public function reviewMember(int $userId, string $decision): void
     {
         $community = $this->community();
@@ -1493,6 +1518,29 @@ new class extends Component
         $this->dispatch('notify', 'Report sent to community moderators.');
     }
 
+    /**
+     * Escalate the whole community to the site-wide moderation queue.
+     */
+    public function reportCommunityToSite(): void
+    {
+        $community = $this->community();
+        $this->requireMember($community);
+        abort_if($community->owner_id === Auth::id(), 422, 'You own this community.');
+
+        $validated = $this->validate([
+            'reportReason' => ['required', 'string', 'max:80'],
+            'reportDetails' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $filed = ContentReports::file(Auth::user(), 'community', $community->id, $validated['reportReason'], $validated['reportDetails']);
+
+        $this->reset('reportReason', 'reportDetails');
+        $this->siteReportOpen = false;
+        $this->dispatch('notify', $filed
+            ? 'Community reported to site admins.'
+            : 'A report about this community is already pending review.');
+    }
+
     public function assignReport(int $reportId): void
     {
         $community = $this->community();
@@ -1823,7 +1871,7 @@ new class extends Component
             : collect();
 
         $recentConversations = Auth::check()
-            ? Conversation::where('user_one_id', Auth::id())->orWhere('user_two_id', Auth::id())
+            ? Conversation::query()->visibleFor(Auth::user())
                 ->orderByDesc('last_message_at')->limit(8)->with(['userOne', 'userTwo'])->get()
             : collect();
 
@@ -1831,13 +1879,13 @@ new class extends Component
             'community', 'membership', 'isMember', 'isOwner', 'isAdmin', 'canManageServer', 'permissions',
             'categories', 'channels', 'threadChannels', 'threadsByMessage', 'threadsByParent',
             'members', 'activeMembers', 'roles', 'emoji', 'formatter',
-            'messages', 'pins', 'polls', 'pollOptions', 'pollVotes',
+            'messages', 'pins', 'polls', 'pollVotes',
             'thread', 'threadParent',
             'forumPosts', 'forumReplies', 'availableForumTags', 'forumPostTagMap',
             'events', 'eventRsvps', 'searchResults',
             'invites', 'auditLogs', 'reports', 'profileMember',
             'myCommunities', 'recentConversations', 'unread',
-        ))->with('activeChannel', $activeChannel);
+        ))->with('activeChannel', $activeChannel)->with('pollOptionGroups', $pollOptions);
     }
 };
 ?>

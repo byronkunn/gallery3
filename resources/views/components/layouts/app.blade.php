@@ -1,4 +1,13 @@
-@props(['title' => 'Booru Gallery', 'lounge' => false, 'flush' => false])
+@props(['title' => null, 'lounge' => false, 'flush' => false])
+@php
+    $siteName = (string) \App\Support\SiteSettings::get('site_name');
+    $siteTagline = (string) \App\Support\SiteSettings::get('site_tagline');
+    $siteDescription = (string) \App\Support\SiteSettings::get('site_description');
+    $siteKeywords = (string) \App\Support\SiteSettings::get('site_meta_keywords');
+    $siteFavicon = \App\Support\SiteSettings::get('site_favicon_url');
+    $siteLogo = \App\Support\SiteSettings::get('site_logo_url');
+    $pendingApproval = auth()->check() && ! auth()->user()->isApproved();
+@endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}"
       x-data="{
@@ -29,8 +38,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>{{ $title ?? 'Booru Gallery' }} — Modern Art & Media Social Platform</title>
-    <meta name="description" content="A visual-first modern booru-style art gallery with Twitter aesthetics, rich Telegram chat, collections, and manga pools.">
+    <title>{{ $title ? $title.' — '.$siteName : $siteName.' — '.$siteTagline }}</title>
+    <meta name="description" content="{{ $siteDescription }}">
+    @if($siteKeywords !== '')
+        <meta name="keywords" content="{{ $siteKeywords }}">
+    @endif
+    @if($siteFavicon)
+        <link rel="icon" href="{{ $siteFavicon }}">
+    @endif
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -57,19 +72,37 @@
 <body class="min-h-screen text-[var(--text-main)] bg-[var(--bg-page)] antialiased transition-colors duration-200"
       @theme-changed.window="themeMode = $event.detail.mode || themeMode; themePalette = $event.detail.palette || themePalette;">
 
+    @php
+        $flashError = session('error');
+        $flashSuccess = session('success');
+    @endphp
+    @if($flashError || $flashSuccess)
+        <div x-data="{ show: true }" x-init="setTimeout(() => show = false, 6000)" x-show="show" x-transition.opacity role="alert"
+             class="fixed left-1/2 top-4 z-[60] flex w-[min(92vw,30rem)] -translate-x-1/2 items-start gap-3 rounded-2xl border px-4 py-3 shadow-lg backdrop-blur-xl {{ $flashError ? 'border-rose-500/40 bg-rose-500/10' : 'border-emerald-500/40 bg-emerald-500/10' }}">
+            <span class="mt-0.5 shrink-0" aria-hidden="true">{{ $flashError ? '⚠️' : '✅' }}</span>
+            <p class="text-sm font-semibold {{ $flashError ? 'text-rose-200' : 'text-emerald-200' }}">{{ $flashError ?? $flashSuccess }}</p>
+            <button type="button" class="{{ $flashError ? 'text-rose-200/70 hover:text-rose-100' : 'text-emerald-200/70 hover:text-emerald-100' }} ml-auto shrink-0" @click="show = false" aria-label="Dismiss">✕</button>
+        </div>
+    @endif
+
     <div class="{{ $flush ? 'flex h-dvh flex-col overflow-hidden bg-[var(--bg-page)]' : 'min-h-screen bg-[var(--bg-page)] relative overflow-x-clip' }}">
         @if($lounge)
             <header class="z-40 shrink-0 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/95 backdrop-blur-xl {{ $flush ? '' : 'sticky top-0' }}">
                 <nav aria-label="Lounge navigation" class="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-                    <a href="{{ route('lounge.explore') }}" class="flex min-w-0 items-center gap-2 font-black tracking-tight">
-                        <span class="flex size-9 shrink-0 items-center justify-center rounded-xl accent-bg text-lg text-white">◉</span>
-                        <span class="truncate">Booru Lounge</span>
-                    </a>
+                    <div class="flex items-center gap-3">
+                        <a href="{{ route('gallery') }}" class="group flex items-center gap-2 rounded-xl bg-[var(--bg-surface-elevated)] px-3 py-1.5 text-xs font-bold text-[var(--text-main)] border border-[var(--border-subtle)] transition hover:accent-bg hover:text-white">
+                            <svg class="h-4 w-4 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                            <span>Back to Site</span>
+                        </a>
+                        <a href="{{ route('lounge.explore') }}" class="flex min-w-0 items-center gap-2 font-black tracking-tight">
+                            <span class="flex size-8 shrink-0 items-center justify-center rounded-xl accent-bg text-base text-white">◉</span>
+                            <span class="truncate hidden sm:inline">Booru Lounge</span>
+                        </a>
+                    </div>
                     <div class="flex shrink-0 items-center gap-1 sm:gap-2">
                         <a href="{{ route('lounge.explore') }}" class="rounded-xl px-2.5 py-2 text-sm font-semibold sm:px-4 {{ request()->routeIs('lounge.explore') ? 'accent-bg text-white' : 'hover:bg-[var(--bg-surface-elevated)]' }}" @if(request()->routeIs('lounge.explore')) aria-current="page" @endif>Explore</a>
-                        <a href="{{ route('gallery') }}" class="rounded-xl px-2.5 py-2 text-sm font-semibold text-[var(--text-muted)] hover:bg-[var(--bg-surface-elevated)] hover:text-[var(--text-main)] sm:px-4">Gallery</a>
                         @auth
-                            <a href="{{ route('messages') }}" class="hidden rounded-xl px-4 py-2 text-sm font-semibold text-[var(--text-muted)] hover:bg-[var(--bg-surface-elevated)] hover:text-[var(--text-main)] sm:inline-flex">Messages</a>
+                            <a href="{{ route('lounge.dms') }}" class="hidden rounded-xl px-4 py-2 text-sm font-semibold {{ request()->routeIs('lounge.dms*') ? 'accent-bg text-white' : 'text-[var(--text-muted)] hover:bg-[var(--bg-surface-elevated)] hover:text-[var(--text-main)]' }} sm:inline-flex">Direct Messages</a>
                             <a href="{{ route('profile', auth()->user()->username) }}" class="hidden size-9 items-center justify-center overflow-hidden rounded-full border border-[var(--border-medium)] sm:inline-flex" aria-label="Your profile"><img src="{{ auth()->user()->avatar_url }}" alt="" class="size-full object-cover"></a>
                         @else
                             <a href="{{ route('login') }}" class="hidden rounded-xl border border-[var(--border-medium)] px-4 py-2 text-sm font-semibold sm:inline-flex">Log in</a>
@@ -88,11 +121,15 @@
                  class="border-b border-[var(--border-subtle)] transition-all duration-300">
                 <a href="{{ route('gallery') }}" class="flex items-center gap-3 overflow-hidden group">
                     <div class="relative flex items-center justify-center w-10 h-10 rounded-2xl accent-bg text-white font-black text-xl tracking-tighter shadow-lg transition-transform duration-300 group-hover:scale-105 shrink-0">
-                        <span>B</span>
+                        @if($siteLogo)
+                            <img src="{{ $siteLogo }}" alt="{{ $siteName }}" class="h-full w-full rounded-2xl object-cover">
+                        @else
+                            <span>{{ mb_substr($siteName, 0, 1) }}</span>
+                        @endif
                         <span class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-[var(--bg-surface)]"></span>
                     </div>
                     <span x-show="!navCollapsed" class="hidden md:inline font-extrabold text-xl tracking-tight bg-gradient-to-r from-[var(--text-main)] to-[var(--text-muted)] bg-clip-text text-transparent truncate">
-                        Booru<span class="accent-text">.art</span>
+                        {{ $siteName }}
                     </span>
                 </a>
 
@@ -135,11 +172,33 @@
                     <span x-show="!navCollapsed" class="hidden md:inline truncate text-base">Pools</span>
                 </a>
 
+                <!-- Tags Hub & Wiki -->
+                <a href="{{ route('tags.index') }}"
+                   class="flex items-center gap-4 px-3.5 py-3.5 rounded-2xl font-semibold transition-all duration-200 group {{ request()->routeIs('tags.*') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-elevated)]' }}"
+                   :title="navCollapsed ? 'Tags Hub & Wiki' : ''">
+                    <svg class="w-6 h-6 shrink-0 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+                    </svg>
+                    <span x-show="!navCollapsed" class="hidden md:inline truncate text-base">Tags</span>
+                </a>
+
                 <a href="{{ route('lounge.explore') }}"
-                   class="flex items-center gap-4 px-3.5 py-3.5 rounded-2xl font-semibold transition-all duration-200 group {{ request()->routeIs('lounge.*') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-elevated)]' }}"
+                   class="relative flex items-center gap-4 px-3.5 py-3.5 rounded-2xl font-semibold transition-all duration-200 group {{ request()->routeIs('lounge.*') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-elevated)]' }}"
                    :title="navCollapsed ? 'Lounge' : ''">
-                    <span class="w-6 h-6 shrink-0 flex items-center justify-center text-lg">◉</span>
+                    <div class="relative shrink-0 flex items-center justify-center w-6 h-6">
+                        <span class="text-lg">◉</span>
+                        @if($unreadMessages > 0)
+                            <span class="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-5 h-5 px-1 text-xs font-bold text-white bg-sky-500 rounded-full ring-2 ring-[var(--bg-surface)]">
+                                {{ $unreadMessages }}
+                            </span>
+                        @endif
+                    </div>
                     <span x-show="!navCollapsed" class="hidden md:inline truncate text-base">Lounge</span>
+                    @if($unreadMessages > 0)
+                        <span x-show="!navCollapsed" class="hidden md:inline ml-auto px-2 py-0.5 text-xs font-bold rounded-full bg-sky-500/20 text-sky-400 border border-sky-500/30">
+                            {{ $unreadMessages }} DMs
+                        </span>
+                    @endif
                 </a>
 
                 <!-- Notifications -->
@@ -160,28 +219,6 @@
                     @if($unreadNotifications > 0)
                         <span x-show="!navCollapsed" class="hidden md:inline ml-auto px-2 py-0.5 text-xs font-bold rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30">
                             {{ $unreadNotifications }}
-                        </span>
-                    @endif
-                </a>
-
-                <!-- Messages (Twitter look, Telegram feel) -->
-                <a href="{{ route('messages') }}"
-                   class="relative flex items-center gap-4 px-3.5 py-3.5 rounded-2xl font-semibold transition-all duration-200 group {{ request()->routeIs('messages*') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-elevated)]' }}"
-                   :title="navCollapsed ? 'Messages' : ''">
-                    <div class="relative shrink-0">
-                        <svg class="w-6 h-6 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-                        </svg>
-                        @if($unreadMessages > 0)
-                            <span class="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-5 h-5 px-1 text-xs font-bold text-white bg-sky-500 rounded-full ring-2 ring-[var(--bg-surface)]">
-                                {{ $unreadMessages }}
-                            </span>
-                        @endif
-                    </div>
-                    <span x-show="!navCollapsed" class="hidden md:inline text-base font-semibold">Messages</span>
-                    @if($unreadMessages > 0)
-                        <span x-show="!navCollapsed" class="hidden md:inline ml-auto px-2 py-0.5 text-xs font-bold rounded-full bg-sky-500/20 text-sky-400 border border-sky-500/30">
-                            {{ $unreadMessages }}
                         </span>
                     @endif
                 </a>
@@ -220,6 +257,9 @@
                 </a>
 
                 <!-- Admin Console (Shown for Admin Users) -->
+                <a href="{{ route('bug-reports.create') }}" class="flex items-center gap-4 rounded-2xl px-3.5 py-3.5 font-semibold text-[var(--text-muted)] transition hover:bg-[var(--bg-surface-elevated)] hover:text-[var(--text-main)]" :title="navCollapsed ? 'Report a bug' : ''">
+                    <span class="text-xl">🐛</span><span x-show="!navCollapsed" class="hidden truncate text-base md:inline">Report a bug</span>
+                </a>
                 @if(auth()->check() && auth()->user()->isAdmin())
                     <a href="{{ route('admin') }}"
                        class="flex items-center gap-4 px-3.5 py-3.5 rounded-2xl font-semibold transition-all duration-200 group {{ request()->routeIs('admin') ? 'bg-amber-500 text-white shadow-md' : 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/10' }}"
@@ -228,6 +268,9 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
                         </svg>
                         <span x-show="!navCollapsed" class="hidden md:inline truncate text-base font-bold">Admin Panel</span>
+                    </a>
+                    <a href="{{ route('moderation') }}" class="flex items-center gap-4 rounded-2xl px-3.5 py-3.5 font-semibold text-amber-400 transition hover:bg-amber-500/10 hover:text-amber-300" :title="navCollapsed ? 'Moderation' : ''">
+                        <span class="text-xl">🛡️</span><span x-show="!navCollapsed" class="hidden truncate text-base md:inline">Moderation</span>
                     </a>
                 @endif
             </nav>
@@ -328,7 +371,37 @@
         <!-- Main Content Area -->
         <main @unless($lounge) :class="navCollapsed ? 'nav-main-collapsed' : 'nav-main-expanded'" @endunless
               class="transition-all duration-300 w-full min-w-0 flex flex-col {{ $flush ? 'min-h-0 flex-1 overflow-hidden' : 'min-h-screen flex-1 overflow-x-clip '.($lounge ? 'pb-8' : 'pb-20 md:pb-8') }}">
+            @unless($lounge)
+                <x-announcement-banner />
+
+                @if($pendingApproval)
+                    <div role="status" class="mx-4 md:mx-6 mt-4 flex items-start gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+                        <span class="mt-0.5 shrink-0" aria-hidden="true">⏳</span>
+                        <p class="text-sm font-semibold text-amber-200">
+                            Your account is awaiting approval. You can browse the gallery, but posting, uploading and messaging stay disabled until an administrator approves you.
+                        </p>
+                    </div>
+                @endif
+            @endunless
             {{ $slot }}
+
+            @unless($lounge)
+                <footer class="mt-8 border-t border-[var(--border-subtle)] px-4 md:px-6 py-5 text-xs text-[var(--text-dim)] flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <span>&copy; {{ now()->year }} {{ $siteName }}</span>
+                    @php($tosUrl = \App\Support\SiteSettings::get('site_tos_url'))
+                    @php($privacyUrl = \App\Support\SiteSettings::get('site_privacy_url'))
+                    @php($contactEmail = \App\Support\SiteSettings::get('site_contact_email'))
+                    @if($tosUrl)
+                        <a href="{{ $tosUrl }}" class="hover:text-[var(--text-main)]">Terms of service</a>
+                    @endif
+                    @if($privacyUrl)
+                        <a href="{{ $privacyUrl }}" class="hover:text-[var(--text-main)]">Privacy policy</a>
+                    @endif
+                    @if($contactEmail)
+                        <a href="mailto:{{ $contactEmail }}" class="hover:text-[var(--text-main)]">Contact</a>
+                    @endif
+                </footer>
+            @endunless
         </main>
     </div>
 
@@ -451,12 +524,12 @@
                     @endif
                 </a>
 
-                <a href="{{ route('messages') }}" @click="mobileMenuOpen = false" class="flex items-center justify-between p-3 rounded-2xl bg-[var(--bg-surface-elevated)] font-semibold text-xs">
+                <a href="{{ route('lounge.dms') }}" @click="mobileMenuOpen = false" class="flex items-center justify-between p-3 rounded-2xl bg-[var(--bg-surface-elevated)] font-semibold text-xs">
                     <div class="flex items-center gap-3">
                         <svg class="w-5 h-5 accent-text" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
                         </svg>
-                        <span>Messages</span>
+                        <span>Direct Messages</span>
                     </div>
                     @if($unreadMessages > 0)
                         <span class="px-1.5 py-0.5 rounded-full bg-sky-500 text-white font-extrabold text-[10px]">{{ $unreadMessages }}</span>
@@ -474,7 +547,9 @@
                     <a href="{{ route('admin') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 font-bold text-xs text-amber-400">
                         <span>🛡️ Admin Panel</span>
                     </a>
+                    <a href="{{ route('moderation') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs font-bold text-amber-400">🛡️ Moderation</a>
                 @endif
+                <a href="{{ route('bug-reports.create') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 rounded-2xl bg-[var(--bg-surface-elevated)] p-3 text-xs font-semibold">🐛 Report a bug</a>
             </div>
 
             <!-- Quick Theme Selector in Mobile Modal -->

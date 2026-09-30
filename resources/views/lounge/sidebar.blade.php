@@ -27,6 +27,10 @@
         <div x-show="open" x-cloak @click.outside="open = false"
              x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
              class="absolute inset-x-2 top-[52px] z-50 space-y-0.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] p-2 text-sm shadow-2xl">
+            <a href="{{ route('gallery') }}" class="flex w-full items-center justify-between rounded-lg px-2.5 py-2 font-bold text-[var(--text-main)] transition hover:bg-[var(--accent-primary)] hover:text-white">
+                <span>← Back to Site</span><span>🏠</span>
+            </a>
+            <div class="my-1 h-px bg-[var(--border-subtle)]"></div>
             @if($isMember && $permissions['manage_members'])
                 <button wire:click="openInvites(); open = false" class="flex w-full items-center justify-between rounded-lg px-2.5 py-2 font-semibold text-[var(--accent-light)] transition hover:bg-[var(--accent-primary)] hover:text-white">
                     <span>Invite people</span><span>＋</span>
@@ -34,6 +38,9 @@
             @endif
             @if($isMember)
                 <button wire:click="openUserSettings(); open = false" class="w-full rounded-lg px-2.5 py-2 text-left font-semibold text-[var(--text-main)] transition hover:bg-[var(--accent-primary)] hover:text-white">Profile &amp; status</button>
+                @if($community->owner_id !== auth()->id())
+                    <button wire:click="$set('siteReportOpen', true); open = false" class="w-full rounded-lg px-2.5 py-2 text-left font-semibold text-amber-400 transition hover:bg-amber-500 hover:text-white">Report server to admins</button>
+                @endif
             @endif
             @if($permissions['manage_channels'])
                 <button wire:click="$set('createChannelOpen', true); open = false" class="w-full rounded-lg px-2.5 py-2 text-left font-semibold text-[var(--text-main)] transition hover:bg-[var(--accent-primary)] hover:text-white">Create channel</button>
@@ -50,7 +57,11 @@
             @endif
             <div class="my-1 h-px bg-[var(--border-subtle)]"></div>
             @auth
-                <button wire:click="leaveCommunity" class="w-full rounded-lg px-2.5 py-2 text-left font-semibold text-rose-400 transition hover:bg-rose-500 hover:text-white">Leave server</button>
+                @if($community->owner_id === auth()->id())
+                    <button wire:click="deleteCommunity" wire:confirm="Delete {{ $community->name }} permanently? This cannot be undone." class="w-full rounded-lg px-2.5 py-2 text-left font-semibold text-rose-400 transition hover:bg-rose-500 hover:text-white">Delete server</button>
+                @else
+                    <button wire:click="leaveCommunity" wire:confirm="Leave this community?" class="w-full rounded-lg px-2.5 py-2 text-left font-semibold text-rose-400 transition hover:bg-rose-500 hover:text-white">Leave server</button>
+                @endif
             @endauth
         </div>
     </div>

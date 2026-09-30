@@ -54,6 +54,19 @@
             </div>
         @endif
 
+        @if($thread && Auth::check() && (Auth::id() === $community->owner_id || Auth::user()?->isAdmin() || $community->hasPermission(Auth::user(), 'manage_channels')))
+            <button wire:click="lockThread({{ $thread->id }})"
+                    class="flex h-7 items-center gap-1.5 rounded-md px-2 text-[13px] font-semibold transition {{ $thread->thread_locked ? 'text-amber-400' : 'text-[var(--text-muted)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-main)]' }}"
+                    title="{{ $thread->thread_locked ? 'Unlock this thread' : 'Lock this thread' }}">
+                {{ $thread->thread_locked ? '🔒' : '🔓' }} <span class="hidden sm:inline">{{ $thread->thread_locked ? 'Locked' : 'Lock' }}</span>
+            </button>
+            <button wire:click="archiveThread({{ $thread->id }})"
+                    class="flex h-7 items-center gap-1.5 rounded-md px-2 text-[13px] font-semibold transition {{ $thread->thread_archived ? 'text-amber-400' : 'text-[var(--text-muted)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-main)]' }}"
+                    title="{{ $thread->thread_archived ? 'Unarchive this thread' : 'Archive this thread' }}">
+                🗄️ <span class="hidden sm:inline">{{ $thread->thread_archived ? 'Archived' : 'Archive' }}</span>
+            </button>
+        @endif
+
         @if($activeChannel->isText() || $activeChannel->isThread())
             <button wire:click="openPins" class="flex h-7 items-center gap-1.5 rounded-md px-2 text-[13px] font-semibold text-[var(--text-muted)] transition hover:bg-[var(--bg-surface)] hover:text-[var(--text-main)]" title="Pinned messages">📌 <span class="hidden sm:inline">Pins</span></button>
             <div class="hidden items-center rounded-md bg-[var(--bg-page)] px-2 sm:flex">
@@ -135,7 +148,7 @@
                         </div>
                         <h3 class="font-bold text-[var(--text-main)]">{{ $poll->question }}</h3>
                         <div class="mt-2 space-y-1.5">
-                            @foreach($pollOptions->get($poll->id, collect()) as $option)
+                            @foreach($pollOptionGroups->get($poll->id, collect()) as $option)
                                 <button wire:click="vote({{ $poll->id }}, {{ $option->id }})" wire:key="poll-option-{{ $option->id }}"
                                         class="flex w-full items-center gap-2 rounded-lg bg-[var(--bg-page)] p-2 text-left text-sm transition hover:ring-1 hover:ring-[var(--accent-primary)]">
                                     <span class="min-w-0 flex-1 break-words text-[var(--text-main)]">{{ $option->label }}</span>
@@ -155,6 +168,7 @@
     <div class="shrink-0 px-4 pb-6"
          x-data="{
              attach: false,
+             pollPanel: false,
              emojiPanel: false,
              commands: [
                  { name: '/shrug', desc: 'Append ¯\\_(ツ)_/¯' },
@@ -248,8 +262,28 @@
                     </div>
                 @endif
 
+                @if($activeChannel->isText() && ! $activeChannel->isThread() && $activeChannel->isPostable())
+                    <div x-show="pollPanel" x-cloak class="mb-2 space-y-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3">
+                        <div class="text-[11px] font-bold uppercase tracking-wide text-[var(--text-dim)]">New poll</div>
+                        <input wire:model="pollQuestion" type="text" maxlength="200" placeholder="Poll question"
+                               class="w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-page)] px-3 py-2 text-sm text-[var(--text-main)]">
+                        @error('pollQuestion') <p class="text-xs text-rose-400">{{ $message }}</p> @enderror
+                        <textarea wire:model="pollOptions" rows="4" maxlength="1200" placeholder="One option per line (at least two)"
+                                  class="w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-page)] px-3 py-2 text-sm text-[var(--text-main)]"></textarea>
+                        @error('pollOptions') <p class="text-xs text-rose-400">{{ $message }}</p> @enderror
+                        <div class="flex items-center gap-2">
+                            <button type="button" wire:click="createPoll" class="rounded-lg accent-bg px-3 py-1.5 text-xs font-bold text-white">Create poll</button>
+                            <button type="button" @click="pollPanel = false" class="text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)]">Cancel</button>
+                        </div>
+                    </div>
+                @endif
+
                 <div class="flex items-end gap-3">
                     <button type="button" @click="attach = ! attach" class="mb-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--bg-surface)] text-lg font-bold text-[var(--text-muted)] transition hover:text-[var(--text-main)]" title="Attach image URL">＋</button>
+
+                    @if($activeChannel->isText() && ! $activeChannel->isThread() && $activeChannel->isPostable())
+                        <button type="button" @click="pollPanel = ! pollPanel" class="mb-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--bg-surface)] text-sm font-bold text-[var(--text-muted)] transition hover:text-[var(--text-main)]" title="Create a poll">📊</button>
+                    @endif
 
                     <textarea wire:model="body" rows="1" x-ref="composerInput" @input="notifyTyping()"
                               @keydown.enter.prevent="if (! $event.shiftKey) { $wire.sendMessage(); }"

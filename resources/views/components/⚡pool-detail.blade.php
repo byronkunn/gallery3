@@ -5,6 +5,7 @@ use App\Models\PoolChapter;
 use App\Models\PoolHistory;
 use App\Models\PoolProgress;
 use App\Models\Post;
+use App\Support\Notifier;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
@@ -132,6 +133,8 @@ new class extends Component
             'action' => 'added_chapter',
             'details' => "Added {$this->chapterTitle} (Chapter {$this->chapterNumber})",
         ]);
+
+        Notifier::poolChapter($ch, $user);
 
         $this->addChapterModalOpen = false;
         $this->chapterTitle = '';

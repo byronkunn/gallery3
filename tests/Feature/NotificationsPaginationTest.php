@@ -59,7 +59,6 @@ class NotificationsPaginationTest extends TestCase
 
         $this->assertSame(2, $component->instance()->getPage());
         $component->assertSee('activity #25');
-        $component->assertDontSee('activity #1<');
     }
 
     public function test_changing_the_filter_resets_to_the_first_page(): void

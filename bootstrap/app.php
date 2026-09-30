@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\DemoAuthMiddleware;
+use App\Http\Middleware\RestrictUnapprovedUsers;
 use App\Http\Middleware\TrackUserActivity;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -17,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
             DemoAuthMiddleware::class,
+            RestrictUnapprovedUsers::class,
             TrackUserActivity::class,
         ]);
     })

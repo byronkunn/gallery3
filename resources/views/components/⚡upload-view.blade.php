@@ -5,6 +5,7 @@ use App\Models\PoolChapter;
 use App\Models\Post;
 use App\Models\PostMedia;
 use App\Models\Tag;
+use App\Support\SiteSettings;
 use App\Support\SpamControls;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -26,6 +27,12 @@ new class extends Component
     public string $sourceUrl = '';
 
     public bool $isNsfw = false;
+
+    public bool $isOriginalCreator = true;
+
+    public string $artistName = '';
+
+    public string $artistUrl = '';
 
     public string $taggingMode = 'whole'; // 'whole' or 'per_image'
 
@@ -293,6 +300,8 @@ new class extends Component
 
     public function submitPost()
     {
+        abort_unless(SiteSettings::bool('site_uploads_enabled'), 403, 'Uploads are currently disabled.');
+
         if (! Auth::check()) {
             $this->dispatch('notify', 'Please log in to upload');
 
@@ -338,6 +347,9 @@ new class extends Component
         // 1. Create Post
         $post = Post::create([
             'user_id' => $user->id,
+            'is_original_creator' => $this->isOriginalCreator,
+            'artist_name' => ! $this->isOriginalCreator && filled(trim($this->artistName)) ? trim($this->artistName) : null,
+            'artist_url' => ! $this->isOriginalCreator && filled(trim($this->artistUrl)) ? trim($this->artistUrl) : null,
             'title' => $this->title,
             'description' => $this->description,
             'media_type' => $this->mediaType,
@@ -347,6 +359,9 @@ new class extends Component
             'is_nsfw' => $this->isNsfw,
             'source_url' => $this->sourceUrl,
         ]);
+
+        // Reward user with reputation for contributing artwork (+10 rep)
+        $user->increment('reputation_score', 10);
 
         // 2. Attach Media
         if ($this->mediaType === 'image') {
@@ -621,6 +636,42 @@ new class extends Component
                             @endforeach
                         </select>
                     </div>
+                </div>
+
+                <!-- Creator & Artist Attribution -->
+                <div class="p-4 rounded-2xl bg-[var(--bg-page)] border border-[var(--border-subtle)] space-y-3">
+                    <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider block">Artwork Ownership & Creator Attribution</label>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button type="button" wire:click="$set('isOriginalCreator', true)" class="p-3 rounded-xl border text-left flex items-center gap-3 transition {{ $isOriginalCreator ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)]/10 text-[var(--text-main)] font-bold' : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-muted)]' }}">
+                            <span class="text-base">🎨</span>
+                            <div>
+                                <div class="text-xs font-bold">I am the original creator</div>
+                                <div class="text-[10px] opacity-75">I created this artwork myself</div>
+                            </div>
+                        </button>
+
+                        <button type="button" wire:click="$set('isOriginalCreator', false)" class="p-3 rounded-xl border text-left flex items-center gap-3 transition {{ !$isOriginalCreator ? 'border-amber-500/50 bg-amber-500/10 text-[var(--text-main)] font-bold' : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-muted)]' }}">
+                            <span class="text-base">🌐</span>
+                            <div>
+                                <div class="text-xs font-bold">Created by another artist</div>
+                                <div class="text-[10px] opacity-75">Booru archive upload</div>
+                            </div>
+                        </button>
+                    </div>
+
+                    @if(!$isOriginalCreator)
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                            <div>
+                                <label class="text-[11px] font-bold text-[var(--text-dim)] uppercase tracking-wider">Artist Name / Handle</label>
+                                <input type="text" wire:model="artistName" placeholder="e.g. WLOP, Sakimichan, Krenz" class="w-full mt-1 p-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs outline-none focus:border-[var(--accent-primary)] font-semibold">
+                            </div>
+
+                            <div>
+                                <label class="text-[11px] font-bold text-[var(--text-dim)] uppercase tracking-wider">Artist Website / Profile Link</label>
+                                <input type="url" wire:model="artistUrl" placeholder="https://pixiv.net/users/..., https://x.com/..." class="w-full mt-1 p-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs outline-none focus:border-[var(--accent-primary)]">
+                            </div>
+                        </div>
+                    @endif
                 </div>
 
                 <div class="pt-2">

@@ -37,6 +37,8 @@ class Community extends Model
         'onboarding_questions',
         'rules',
         'member_count',
+        'archived_at',
+        'archive_reason',
     ];
 
     protected function casts(): array
@@ -45,7 +47,13 @@ class Community extends Model
             'topics' => 'array',
             'onboarding_questions' => 'array',
             'member_count' => 'integer',
+            'archived_at' => 'datetime',
         ];
+    }
+
+    public function isArchived(): bool
+    {
+        return ! is_null($this->archived_at);
     }
 
     public function owner(): BelongsTo

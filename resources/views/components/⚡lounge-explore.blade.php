@@ -204,7 +204,7 @@ new class extends Component
             : collect();
 
         $recentConversations = Auth::check()
-            ? Conversation::where('user_one_id', Auth::id())->orWhere('user_two_id', Auth::id())
+            ? Conversation::query()->visibleFor(Auth::user())
                 ->orderByDesc('last_message_at')->limit(8)->with(['userOne', 'userTwo'])->get()
             : collect();
 

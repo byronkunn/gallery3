@@ -41,6 +41,14 @@
                         Confirm password
                         <input type="password" name="password_confirmation" required autocomplete="new-password" class="mt-1 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-page)] px-3 py-2.5 text-sm outline-none focus:border-[var(--accent-primary)]">
                     </label>
+
+                    @if(\App\Support\SiteSettings::bool('site_registration_invite_only'))
+                        <label class="block text-sm font-semibold text-[var(--text-main)]">
+                            Invite code
+                            <input type="text" name="invite_code" value="{{ old('invite_code') }}" required placeholder="e.g. INV-88392" class="mt-1 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-page)] px-3 py-2.5 text-sm outline-none focus:border-[var(--accent-primary)]">
+                            @error('invite_code') <span class="mt-1 block text-xs text-rose-400">{{ $message }}</span> @enderror
+                        </label>
+                    @endif
                 @else
                     <label class="flex items-center gap-2 text-sm text-[var(--text-muted)]">
                         <input type="checkbox" name="remember" value="1" class="rounded border-[var(--border-subtle)]">

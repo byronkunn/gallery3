@@ -230,11 +230,19 @@
                     </div>
                 @elseif($serverTab === 'danger')
                     <div class="space-y-4">
-                        <div class="rounded-xl border border-rose-500/30 bg-rose-500/5 p-4">
-                            <h3 class="font-bold text-rose-400">Leave {{ $community->name }}</h3>
-                            <p class="mt-1 text-sm text-[var(--text-muted)]">You will lose access to its channels until you rejoin. The owner cannot leave.</p>
-                            <button wire:click="leaveCommunity" wire:confirm="Leave this community?" class="mt-3 rounded-xl bg-rose-500 px-4 py-2 text-sm font-bold text-white">Leave server</button>
-                        </div>
+                        @if($isOwner)
+                            <div class="rounded-xl border border-rose-500/30 bg-rose-500/5 p-4">
+                                <h3 class="font-bold text-rose-400">Delete {{ $community->name }}</h3>
+                                <p class="mt-1 text-sm text-[var(--text-muted)]">Permanently deletes this server with its channels, threads, messages, members and invites. This cannot be undone.</p>
+                                <button wire:click="deleteCommunity" wire:confirm="Delete {{ $community->name }} permanently? This cannot be undone." class="mt-3 rounded-xl bg-rose-500 px-4 py-2 text-sm font-bold text-white">Delete server</button>
+                            </div>
+                        @else
+                            <div class="rounded-xl border border-rose-500/30 bg-rose-500/5 p-4">
+                                <h3 class="font-bold text-rose-400">Leave {{ $community->name }}</h3>
+                                <p class="mt-1 text-sm text-[var(--text-muted)]">You will lose access to its channels until you rejoin.</p>
+                                <button wire:click="leaveCommunity" wire:confirm="Leave this community?" class="mt-3 rounded-xl bg-rose-500 px-4 py-2 text-sm font-bold text-white">Leave server</button>
+                            </div>
+                        @endif
                         @if($permissions['manage_channels'])
                             <div class="rounded-xl border border-rose-500/30 bg-rose-500/5 p-4">
                                 <h3 class="font-bold text-rose-400">Delete #{{ $activeChannel->name }}</h3>

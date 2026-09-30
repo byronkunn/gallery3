@@ -104,6 +104,38 @@
                     <span x-show="!navCollapsed" class="hidden xl:inline truncate text-base">Gallery</span>
                 </a>
 
+                <!-- Following Management -->
+                @if(auth()->check())
+                    <a href="{{ route('following.index') }}"
+                       class="flex items-center gap-4 px-3.5 py-3.5 rounded-2xl font-semibold transition-all duration-200 group {{ request()->routeIs('following.*') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-elevated)]' }}"
+                       :title="navCollapsed ? 'Following' : ''">
+                        <svg class="w-6 h-6 shrink-0 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                        </svg>
+                        <span x-show="!navCollapsed" class="hidden xl:inline truncate text-base">Following</span>
+                    </a>
+                @endif
+
+                <!-- Collections Hub -->
+                <a href="{{ route('collections.hub') }}"
+                   class="flex items-center gap-4 px-3.5 py-3.5 rounded-2xl font-semibold transition-all duration-200 group {{ request()->routeIs('collections.*') || request()->routeIs('collection.*') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-elevated)]' }}"
+                   :title="navCollapsed ? 'Collections' : ''">
+                    <svg class="w-6 h-6 shrink-0 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                    </svg>
+                    <span x-show="!navCollapsed" class="hidden xl:inline truncate text-base">Collections</span>
+                </a>
+
+                <!-- Artists Directory -->
+                <a href="{{ route('artists.index') }}"
+                   class="flex items-center gap-4 px-3.5 py-3.5 rounded-2xl font-semibold transition-all duration-200 group {{ request()->routeIs('artists.*') || request()->routeIs('artist.*') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-elevated)]' }}"
+                   :title="navCollapsed ? 'Artists' : ''">
+                    <svg class="w-6 h-6 shrink-0 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
+                    </svg>
+                    <span x-show="!navCollapsed" class="hidden xl:inline truncate text-base">Artists</span>
+                </a>
+
                 <!-- Pools (Series & Manga) -->
                 <a href="{{ route('pools.index') }}"
                    class="flex items-center gap-4 px-3.5 py-3.5 rounded-2xl font-semibold transition-all duration-200 group {{ request()->routeIs('pools.*') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-elevated)]' }}"
@@ -136,10 +168,10 @@
                     @endif
                 </a>
 
-                <!-- Messages (Twitter look, Telegram feel) -->
-                <a href="{{ route('messages') }}"
-                   class="relative flex items-center gap-4 px-3.5 py-3.5 rounded-2xl font-semibold transition-all duration-200 group {{ request()->routeIs('messages*') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-elevated)]' }}"
-                   :title="navCollapsed ? 'Messages' : ''">
+                <!-- Direct Messages (Lounge Area DMs) -->
+                <a href="{{ route('lounge.dms') }}"
+                   class="relative flex items-center gap-4 px-3.5 py-3.5 rounded-2xl font-semibold transition-all duration-200 group {{ request()->routeIs('lounge.dms*') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-elevated)]' }}"
+                   :title="navCollapsed ? 'Direct Messages' : ''">
                     <div class="relative shrink-0">
                         <svg class="w-6 h-6 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
@@ -150,7 +182,7 @@
                             </span>
                         @endif
                     </div>
-                    <span x-show="!navCollapsed" class="hidden xl:inline text-base font-semibold">Messages</span>
+                    <span x-show="!navCollapsed" class="hidden xl:inline text-base font-semibold">Direct Messages</span>
                     @if($unreadMessages > 0)
                         <span x-show="!navCollapsed" class="hidden xl:inline ml-auto px-2 py-0.5 text-xs font-bold rounded-full bg-sky-500/20 text-sky-400 border border-sky-500/30">
                             {{ $unreadMessages }}
@@ -286,7 +318,8 @@
         <!-- Main Content Area -->
         <main :class="navCollapsed ? 'nav-main-collapsed' : 'nav-main-expanded'"
               class="flex-1 w-full min-w-0 pb-20 md:pb-8 transition-all duration-300 min-h-screen flex flex-col overflow-x-clip">
-            {{ $slot }}
+            {{ $slot ?? '' }}
+            @yield('content')
         </main>
     </div>
 
@@ -300,8 +333,8 @@
             <span class="text-[10px] mt-0.5">Gallery</span>
         </a>
 
-        <!-- Messages -->
-        <a href="{{ route('messages') }}" class="flex-1 relative flex flex-col items-center justify-center p-2 {{ request()->routeIs('messages*') ? 'accent-text font-bold' : 'text-[var(--text-muted)]' }}">
+        <!-- Direct Messages -->
+        <a href="{{ route('lounge.dms') }}" class="flex-1 relative flex flex-col items-center justify-center p-2 {{ request()->routeIs('lounge.dms*') ? 'accent-text font-bold' : 'text-[var(--text-muted)]' }}">
             <div class="relative">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>

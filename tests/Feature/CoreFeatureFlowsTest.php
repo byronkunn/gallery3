@@ -282,6 +282,37 @@ class CoreFeatureFlowsTest extends TestCase
         $this->assertDatabaseCount('community_invites', 0);
     }
 
+    public function test_reputation_score_and_artist_attribution_flows(): void
+    {
+        $uploader = $this->createUser();
+        $liker = $this->createUser();
+
+        $initialRep = $uploader->reputation_score;
+
+        Livewire::actingAs($uploader)->test('⚡upload-view')
+            ->set('title', 'Archived Masterpiece')
+            ->set('description', 'Uploaded from external portfolio')
+            ->set('images', ['https://example.test/archived.png'])
+            ->set('isOriginalCreator', false)
+            ->set('artistName', 'WLOP')
+            ->set('artistUrl', 'https://pixiv.net/users/123456')
+            ->call('submitPost');
+
+        $post = Post::where('title', 'Archived Masterpiece')->firstOrFail();
+        $this->assertFalse($post->is_original_creator);
+        $this->assertEquals('WLOP', $post->artist_name);
+        $this->assertEquals('https://pixiv.net/users/123456', $post->artist_url);
+
+        // Uploading rewards +10 rep
+        $this->assertEquals($initialRep + 10, $uploader->fresh()->reputation_score);
+
+        // Liking artwork awards +2 rep to post uploader
+        Livewire::actingAs($liker)->test('⚡post-detail', ['postId' => $post->id])
+            ->call('toggleLike');
+
+        $this->assertEquals($initialRep + 12, $uploader->fresh()->reputation_score);
+    }
+
     private function createPost(User $user): Post
     {
         $post = Post::create(['user_id' => $user->id, 'title' => 'Artwork', 'media_type' => 'image', 'media_count' => 1]);

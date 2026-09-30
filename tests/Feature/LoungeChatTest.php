@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Community;
 use App\Models\CommunityMessage;
+use App\Models\Conversation;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -223,5 +224,115 @@ class LoungeChatTest extends TestCase
             'category_id' => $categoryId,
             'slowmode_seconds' => 10,
         ]);
+    }
+
+    public function test_lounge_direct_messages_can_be_sent_and_replied_to(): void
+    {
+        Livewire::actingAs($this->owner)
+            ->test('⚡lounge-dms')
+            ->call('startConversationWithUser', $this->member->id)
+            ->set('messageText', 'Hello in Lounge DMs!')
+            ->call('sendMessage');
+
+        $conversationId = DB::table('conversations')->where('user_one_id', $this->owner->id)->where('user_two_id', $this->member->id)->value('id');
+        $this->assertNotNull($conversationId);
+
+        $this->assertDatabaseHas('messages', [
+            'conversation_id' => $conversationId,
+            'sender_id' => $this->owner->id,
+            'text' => 'Hello in Lounge DMs!',
+        ]);
+
+        Livewire::actingAs($this->member)
+            ->test('⚡lounge-dms', ['conversationId' => $conversationId])
+            ->set('messageText', 'Replying from Lounge DMs!')
+            ->call('sendMessage');
+
+        $this->assertDatabaseHas('messages', [
+            'conversation_id' => $conversationId,
+            'sender_id' => $this->member->id,
+            'text' => 'Replying from Lounge DMs!',
+        ]);
+    }
+
+    public function test_deleting_a_direct_message_thread_hides_it_only_for_that_user(): void
+    {
+        Livewire::actingAs($this->owner)
+            ->test('⚡lounge-dms')
+            ->call('startConversationWithUser', $this->member->id)
+            ->set('messageText', 'thread to delete')
+            ->call('sendMessage');
+
+        $conversation = Conversation::firstOrFail();
+
+        Livewire::actingAs($this->owner)
+            ->test('⚡lounge-dms', ['conversationId' => $conversation->id])
+            ->assertSee('Delete')
+            ->call('deleteConversation');
+
+        $conversation->refresh();
+        $this->assertNotNull($conversation->user_one_hidden_at);
+        $this->assertNull($conversation->user_two_hidden_at);
+
+        Livewire::actingAs($this->owner)
+            ->test('⚡lounge-dms')
+            ->assertDontSee('thread to delete');
+
+        Livewire::actingAs($this->member)
+            ->test('⚡lounge-dms')
+            ->assertSee('thread to delete');
+    }
+
+    public function test_a_new_message_restores_a_deleted_thread_for_the_recipient(): void
+    {
+        Livewire::actingAs($this->owner)
+            ->test('⚡lounge-dms')
+            ->call('startConversationWithUser', $this->member->id)
+            ->set('messageText', 'first hello')
+            ->call('sendMessage');
+
+        $conversation = Conversation::firstOrFail();
+
+        Livewire::actingAs($this->owner)
+            ->test('⚡lounge-dms', ['conversationId' => $conversation->id])
+            ->call('deleteConversation');
+
+        $this->assertNotNull($conversation->fresh()->user_one_hidden_at);
+
+        Livewire::actingAs($this->member)
+            ->test('⚡lounge-dms', ['conversationId' => $conversation->id])
+            ->set('messageText', 'are you still there?')
+            ->call('sendMessage');
+
+        $this->assertNull($conversation->fresh()->user_one_hidden_at);
+
+        Livewire::actingAs($this->owner)
+            ->test('⚡lounge-dms')
+            ->assertSee('are you still there?');
+    }
+
+    public function test_owner_can_delete_their_community_with_all_of_its_data(): void
+    {
+        $this->space($this->member)->set('body', 'hello before deletion')->call('sendMessage');
+        $this->assertDatabaseCount('community_messages', 1);
+
+        $this->space($this->owner)
+            ->assertSee('Delete server')
+            ->call('deleteCommunity')
+            ->assertRedirect(route('lounge.explore'))
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseMissing('communities', ['id' => $this->community->id]);
+        $this->assertDatabaseCount('community_members', 0);
+        $this->assertDatabaseCount('community_channels', 0);
+        $this->assertDatabaseCount('community_messages', 0);
+        $this->assertDatabaseCount('community_roles', 0);
+    }
+
+    public function test_non_owner_cannot_delete_the_community(): void
+    {
+        $this->space($this->member)->call('deleteCommunity')->assertStatus(403);
+
+        $this->assertDatabaseHas('communities', ['id' => $this->community->id]);
     }
 }

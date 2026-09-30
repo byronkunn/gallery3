@@ -2,12 +2,18 @@
 
 use App\Http\Controllers\AppealController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BugReportController;
+use App\Models\Artist;
+use App\Models\ArtistAlias;
 use App\Models\Collection;
 use App\Models\Community;
 use App\Models\Conversation;
 use App\Models\Pool;
 use App\Models\Post;
+use App\Models\Tag;
+use App\Models\TagAlias;
 use App\Models\User;
+use App\Support\SiteSettings;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -23,6 +29,8 @@ Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->n
 
 Route::get('/appeals', [AppealController::class, 'index'])->name('appeals.index');
 Route::post('/appeals', [AppealController::class, 'store'])->middleware('throttle:3,60')->name('appeals.store');
+Route::get('/report-bug', [BugReportController::class, 'create'])->name('bug-reports.create');
+Route::post('/report-bug', [BugReportController::class, 'store'])->middleware('throttle:3,60')->name('bug-reports.store');
 
 // 1. Gallery Feed (Home, Explore, Search)
 Route::get('/', function () {
@@ -34,6 +42,8 @@ Route::get('/gallery', function () {
 });
 
 Route::get('/lounge', function () {
+    abort_unless(SiteSettings::bool('site_lounge_enabled'), 403, 'The lounge is currently disabled.');
+
     return view('pages.lounge');
 })->name('lounge.explore');
 
@@ -61,7 +71,17 @@ Route::get('/lounge/invite/{code}', function (string $code) {
     return redirect()->route('lounge.community', $community->slug);
 })->middleware('auth')->name('lounge.invite');
 
+Route::get('/lounge/dms/{conversationId?}', function ($conversationId = null) {
+    abort_unless(SiteSettings::bool('site_dms_enabled') && SiteSettings::bool('site_lounge_enabled'), 403, 'Direct messages are currently disabled.');
+
+    return view('pages.lounge-dms', [
+        'conversationId' => $conversationId ? (int) $conversationId : null,
+    ]);
+})->name('lounge.dms');
+
 Route::get('/lounge/{slug}/{channel?}', function (string $slug, ?string $channel = null) {
+    abort_unless(SiteSettings::bool('site_lounge_enabled'), 403, 'The lounge is currently disabled.');
+
     return view('pages.community', ['slug' => $slug, 'channel' => $channel]);
 })->name('lounge.community');
 
@@ -84,11 +104,9 @@ Route::get('/profile/{username}', function ($username) {
     ]);
 })->name('profile');
 
-// 4. Messaging (Twitter-look, Telegram-feel 1:1 chat)
+// 4. Standalone Direct Messaging Redirect to Lounge Area DMs
 Route::get('/messages/{conversationId?}', function ($conversationId = null) {
-    return view('pages.messages', [
-        'conversationId' => $conversationId ? (int) $conversationId : null,
-    ]);
+    return redirect()->route('lounge.dms', ['conversationId' => $conversationId]);
 })->name('messages');
 
 // 5. Notifications
@@ -97,12 +115,14 @@ Route::get('/notifications', function () {
 })->name('notifications');
 
 // 6. Settings
-Route::get('/settings', function () {
-    return view('pages.settings');
+Route::get('/settings/{category?}', function (?string $category = null) {
+    return view('pages.settings', ['category' => $category]);
 })->name('settings');
 
 // 7. Upload
 Route::get('/upload', function () {
+    abort_unless(SiteSettings::bool('site_uploads_enabled'), 403, 'Uploads are currently disabled.');
+
     return view('pages.upload');
 })->name('upload');
 
@@ -120,15 +140,94 @@ Route::get('/pools/{id}', function ($id) {
     ]);
 })->name('pools.detail');
 
-// 9. Collections
+// 9. Following Management
+Route::get('/following', function () {
+    return view('pages.following');
+})->middleware('auth')->name('following.index');
+
+// 10. Collections Hub & Detail
+Route::get('/collections', function () {
+    return view('pages.collections-hub');
+})->name('collections.hub');
+
 Route::get('/collections/{id}', function ($id) {
     $coll = Collection::findOrFail($id);
+    if ($coll->isPrivate() && Auth::id() !== $coll->user_id && ! Auth::user()?->isAdmin()) {
+        abort(404);
+    }
 
     return view('pages.collection-detail', [
         'id' => (int) $id,
         'title' => $coll->title.' — Collection',
     ]);
 })->name('collection.detail');
+
+// 11. Artists Discovery Directory & Artist Detail Catalog
+Route::get('/artists', function () {
+    return view('pages.artists-index');
+})->name('artists.index');
+
+Route::get('/artists/{slug}', function (string $slug) {
+    // Lookup by primary slug or alias slug
+    $artist = Artist::where('slug', $slug)->first();
+    if (! $artist) {
+        $alias = ArtistAlias::where('slug', $slug)->first();
+        if ($alias) {
+            $artist = $alias->artist;
+        }
+    }
+
+    if (! $artist) {
+        abort(404);
+    }
+
+    return view('pages.artist-detail', [
+        'slug' => $artist->slug,
+        'artist' => $artist,
+        'title' => $artist->name.' — Artist Catalog',
+    ]);
+})->name('artist.detail');
+
+// 12. Unified Tags & Tag Wiki System
+Route::get('/tags', function () {
+    return view('pages.tags-index');
+})->name('tags.index');
+
+Route::get('/tags/create', function () {
+    return view('pages.tag-create');
+})->name('tags.create');
+
+Route::get('/tags/{name}/edit-wiki', function (string $name) {
+    $normalized = Tag::normalizeName($name);
+    $tag = Tag::where('name', $normalized)->orWhere('slug', $normalized)->firstOrFail();
+
+    return view('pages.tag-wiki-editor', [
+        'name' => $tag->name,
+        'tag' => $tag,
+        'title' => 'Edit Wiki — #'.$tag->name,
+    ]);
+})->middleware('auth')->name('tags.edit-wiki');
+
+Route::get('/tags/{name}/{tab?}', function (string $name, ?string $tab = null) {
+    $normalized = Tag::normalizeName($name);
+    $tag = Tag::where('name', $normalized)->orWhere('slug', $normalized)->first();
+
+    if (! $tag) {
+        // Check if $name is an alias
+        $alias = TagAlias::where('alias', $normalized)->first();
+        if ($alias) {
+            return redirect()->route('tags.show', ['name' => $alias->tag->name, 'tab' => $tab]);
+        }
+        abort(404);
+    }
+
+    return view('pages.tag-detail', [
+        'name' => $tag->name,
+        'tag' => $tag,
+        'tab' => $tab ?? 'posts',
+        'title' => '#'.$tag->name.' — Tags & Wiki',
+    ]);
+})->name('tags.show');
 
 // Demo account switching is available only in local and test environments.
 if (app()->environment(['local', 'testing'])) {
@@ -156,8 +255,16 @@ Route::get('/admin', function () {
         return redirect()->route('gallery')->with('error', 'Unauthorized access.');
     }
 
-    return view('pages.admin');
+    return view('pages.admin', ['area' => 'admin']);
 })->name('admin');
+
+Route::get('/moderation', function () {
+    if (! Auth::check() || ! Auth::user()->isAdmin()) {
+        return redirect()->route('gallery')->with('error', 'Unauthorized access.');
+    }
+
+    return view('pages.admin', ['area' => 'moderation']);
+})->name('moderation');
 
 // 12. Admin Message Exporter & Media Exporter
 Route::get('/admin/export-chat/{conversationId}', function ($conversationId) {

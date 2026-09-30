@@ -1,49 +1,194 @@
 <?php
 
-use Livewire\Component;
-use App\Models\User;
 use App\Models\Tag;
+use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Livewire\Component;
 
 new class extends Component
 {
-    public string $activeCategory = 'display'; // 'display', 'content', 'account', 'notifications', 'privacy'
+    public string $activeCategory = 'account';
 
-    // Display
-    public string $themeMode = 'dark';
-    public string $themePalette = 'violet';
-    public string $fontSize = 'md';
-    public bool $reducedMotion = false;
+    public string $mobileScreen = 'list'; // 'list', 'detail'
 
-    // Content filters & Blacklist
-    public bool $blurNsfw = true;
-    public bool $hideNsfw = false;
-    public string $newBlacklistTag = '';
+    public string $searchQuery = '';
 
     // Account
     public string $name = '';
+
     public string $username = '';
+
     public string $email = '';
+
+    public string $language = 'en';
+
+    public string $region = 'US';
+
+    public string $timezone = 'UTC';
+
+    public string $currentPassword = '';
+
+    public string $newPassword = '';
+
+    public string $newPasswordConfirmation = '';
+
+    // Profile
     public string $bio = '';
+
     public string $website = '';
-    public string $commissionStatus = 'Open';
 
-    // Media & Autoplay Settings
-    public string $defaultGrid = 'masonry';
-    public int $slideshowDuration = 5000;
-    public bool $videoAutoplay = true;
-    public bool $infiniteScroll = true;
+    public string $profileVisibility = 'public';
 
-    // Artist & Commission Preferences
-    public string $minPrice = '50';
-    public string $openSlotsCount = '3/5';
-    public array $paymentMethods = ['PayPal', 'Ko-fi', 'Patreon'];
-    public bool $watermarkProtection = true;
+    public bool $showJoinDate = true;
 
-    public function mount()
+    public bool $showFollowerCount = true;
+
+    public bool $showFollowingCount = true;
+
+    public bool $showLikesTab = true;
+
+    public bool $showCollectionsTab = true;
+
+    // Privacy & Safety
+    public string $whoCanFollow = 'everyone'; // 'everyone', 'approval'
+
+    public string $whoCanComment = 'everyone'; // 'everyone', 'followers', 'following', 'nobody'
+
+    public string $whoCanMention = 'everyone'; // 'everyone', 'following', 'nobody'
+
+    public string $likesVisibility = 'everyone'; // 'everyone', 'followers', 'only_me'
+
+    public string $followingVisibility = 'everyone'; // 'everyone', 'only_me'
+
+    // Content Filters
+    public bool $ratingSafe = true;
+
+    public bool $ratingQuestionable = true;
+
+    public bool $ratingExplicit = false;
+
+    public bool $blurNsfw = true;
+
+    public bool $hideNsfw = false;
+
+    // Feed & Discovery
+    public bool $feedUseLikes = true;
+
+    public bool $feedUseFollowedTags = true;
+
+    public bool $feedUseRecentlyViewed = true;
+
+    public string $followingFeedSort = 'newest'; // 'newest', 'popular'
+
+    // Messages Privacy
+    public string $whoCanDm = 'everyone'; // 'everyone', 'following', 'mutuals', 'nobody'
+
+    public string $whoCanAddGroupDm = 'everyone'; // 'everyone', 'following', 'mutuals', 'nobody'
+
+    public bool $routeUnknownToRequests = true;
+
+    public bool $showOnlineStatus = true;
+
+    public bool $showTypingIndicator = true;
+
+    public bool $sendReadReceipts = true;
+
+    public bool $previewExternalLinks = true;
+
+    public bool $previewGalleryPosts = true;
+
+    public bool $previewArtists = true;
+
+    public bool $previewCollections = true;
+
+    public bool $previewTags = true;
+
+    // Lounges
+    public bool $loungeMentionNotify = true;
+
+    public bool $loungeRoleNotify = true;
+
+    public bool $loungeReplyNotify = true;
+
+    public bool $loungeThreadNotify = true;
+
+    public bool $loungeInviteNotify = true;
+
+    public bool $loungeAnnouncementNotify = true;
+
+    public string $loungeUploadDefault = 'lounge_only'; // 'lounge_only', 'remember', 'ask'
+
+    // Notifications
+    public bool $notifyFollows = true;
+
+    public bool $notifyLikes = true;
+
+    public bool $notifyComments = true;
+
+    public bool $notifyMentions = true;
+
+    public bool $notifyArtistActivity = true;
+
+    public bool $notifyTagActivity = true;
+
+    public bool $notifyCollectionActivity = true;
+
+    public bool $notifyDirectMessages = true;
+
+    public bool $notifySecurityAlerts = true;
+
+    // Uploads & Media Defaults
+    public string $defaultRating = 'Safe';
+
+    public string $defaultVisibility = 'Public';
+
+    public bool $commentsEnabledDefault = true;
+
+    public bool $rememberTags = true;
+
+    public bool $rememberArtists = true;
+
+    // Tags & Filters
+    public string $newMutedTag = '';
+
+    // Collections Defaults
+    public string $defaultCollectionVisibility = 'Private';
+
+    // Appearance
+    public string $themeMode = 'dark';
+
+    public string $themePalette = 'violet';
+
+    public string $galleryDensity = 'comfortable';
+
+    public string $chatDensity = 'comfortable';
+
+    public string $fontSize = 'md';
+
+    // Accessibility
+    public bool $reducedMotion = false;
+
+    public function mount(?string $category = null)
     {
+        if ($category && in_array($category, [
+            'account', 'profile', 'privacy', 'content', 'feed', 'messages',
+            'lounges', 'notifications', 'uploads', 'tags', 'collections',
+            'appearance', 'accessibility', 'security', 'blocked', 'sessions',
+        ])) {
+            $this->activeCategory = $category;
+            $this->mobileScreen = 'detail';
+        }
+
         $user = Auth::user();
         if ($user) {
+            $this->name = $user->name ?? '';
+            $this->username = $user->username ?? '';
+            $this->email = $user->email ?? '';
+            $this->bio = $user->bio ?? '';
+            $this->website = $user->website ?? '';
+
             $this->themeMode = $user->theme_mode ?? 'dark';
             $this->themePalette = $user->theme_palette ?? 'violet';
             $this->fontSize = $user->font_size ?? 'md';
@@ -51,19 +196,18 @@ new class extends Component
 
             $this->blurNsfw = $user->blur_nsfw ?? true;
             $this->hideNsfw = $user->hide_nsfw ?? false;
-
-            $this->name = $user->name;
-            $this->username = $user->username;
-            $this->email = $user->email;
-            $this->bio = $user->bio ?? '';
-            $this->website = $user->website ?? '';
-            $this->commissionStatus = $user->commission_status ?? 'Open';
         }
     }
 
     public function setCategory(string $cat)
     {
         $this->activeCategory = $cat;
+        $this->mobileScreen = 'detail';
+    }
+
+    public function backToMobileList()
+    {
+        $this->mobileScreen = 'list';
     }
 
     public function updateTheme(string $mode, string $palette)
@@ -79,7 +223,7 @@ new class extends Component
         }
 
         $this->dispatch('theme-changed', mode: $this->themeMode, palette: $this->themePalette);
-        $this->dispatch('notify', 'Theme updated');
+        $this->dispatch('notify', 'Theme preference updated.');
     }
 
     public function updateFontSize(string $size)
@@ -88,39 +232,45 @@ new class extends Component
         if (Auth::check()) {
             Auth::user()->update(['font_size' => $size]);
         }
-        $this->dispatch('notify', 'Font scale updated');
+        $this->dispatch('notify', 'Font size updated.');
     }
 
     public function toggleReducedMotion()
     {
-        $this->reducedMotion = !$this->reducedMotion;
+        $this->reducedMotion = ! $this->reducedMotion;
         if (Auth::check()) {
             Auth::user()->update(['reduced_motion' => $this->reducedMotion]);
         }
-        $this->dispatch('notify', 'Motion preference saved');
+        $this->dispatch('notify', 'Motion preference saved.');
     }
 
     public function updateContentFilters()
     {
-        if (!Auth::check()) return;
+        if (! Auth::check()) {
+            return;
+        }
 
         Auth::user()->update([
             'blur_nsfw' => $this->blurNsfw,
             'hide_nsfw' => $this->hideNsfw,
         ]);
 
-        $this->dispatch('notify', 'Content filters saved');
+        $this->dispatch('notify', '✓ Saved content filters.');
     }
 
-    public function addBlacklistTag()
+    public function addMutedTag()
     {
-        if (!Auth::check()) return;
+        if (! Auth::check()) {
+            return;
+        }
 
-        $tagName = trim($this->newBlacklistTag);
-        if (empty($tagName)) return;
+        $tagName = trim($this->newMutedTag);
+        if (empty($tagName)) {
+            return;
+        }
 
         $tag = Tag::where('name', $tagName)->first();
-        if (!$tag) {
+        if (! $tag) {
             $tag = Tag::create([
                 'name' => $tagName,
                 'slug' => \Illuminate\Support\Str::slug($tagName),
@@ -129,39 +279,42 @@ new class extends Component
         }
 
         $user = Auth::user();
-        if (!$user->isTagBlacklisted($tag)) {
+        if (! $user->isTagBlacklisted($tag)) {
             $user->blacklistedTags()->attach($tag->id);
-            $this->dispatch('notify', "Added #{$tag->name} to blacklist");
+            $this->dispatch('notify', "Added #{$tag->name} to muted tags.");
         }
 
-        $this->newBlacklistTag = '';
+        $this->newMutedTag = '';
     }
 
-    public function removeBlacklistTag(int $tagId)
+    public function removeMutedTag(int $tagId)
     {
-        if (!Auth::check()) return;
+        if (! Auth::check()) {
+            return;
+        }
         Auth::user()->blacklistedTags()->detach($tagId);
-        $this->dispatch('notify', 'Tag removed from blacklist');
+        $this->dispatch('notify', 'Tag removed from muted list.');
     }
 
     public function unblockUser(int $userId): void
     {
         abort_unless(Auth::check(), 401);
         Auth::user()->blockedUsers()->detach($userId);
-        $this->dispatch('notify', 'Artist unblocked.');
+        $this->dispatch('notify', 'User unblocked.');
     }
 
     public function saveAccount()
     {
-        if (!Auth::check()) return;
+        if (! Auth::check()) {
+            return;
+        }
 
         $this->validate([
             'name' => 'required|string|max:60',
-            'username' => 'required|string|max:40|unique:users,username,' . Auth::id(),
-            'email' => 'required|email|unique:users,email,' . Auth::id(),
+            'username' => 'required|string|max:40|unique:users,username,'.Auth::id(),
+            'email' => 'required|email|unique:users,email,'.Auth::id(),
             'bio' => 'nullable|string|max:500',
             'website' => 'nullable|url|max:200',
-            'commissionStatus' => 'required|in:Open,Closed,Waitlist',
         ]);
 
         Auth::user()->update([
@@ -170,10 +323,49 @@ new class extends Component
             'email' => $this->email,
             'bio' => $this->bio,
             'website' => $this->website,
-            'commission_status' => $this->commissionStatus,
         ]);
 
-        $this->dispatch('notify', 'Account settings saved!');
+        $this->dispatch('notify', 'Account & profile settings updated!');
+    }
+
+    public function changePassword()
+    {
+        if (! Auth::check()) {
+            return;
+        }
+
+        $this->validate([
+            'currentPassword' => 'required',
+            'newPassword' => 'required|min:8|confirmed',
+        ]);
+
+        if (! Hash::check($this->currentPassword, Auth::user()->password)) {
+            $this->addError('currentPassword', 'Current password does not match.');
+
+            return;
+        }
+
+        Auth::user()->update([
+            'password' => Hash::make($this->newPassword),
+        ]);
+
+        $this->reset('currentPassword', 'newPassword', 'newPasswordConfirmation');
+        $this->dispatch('notify', 'Password successfully changed.');
+    }
+
+    public function logoutAllOtherSessions(): void
+    {
+        $user = Auth::user();
+        if (! $user) {
+            return;
+        }
+
+        DB::table('sessions')
+            ->where('user_id', $user->id)
+            ->where('id', '!=', session()->getId())
+            ->delete();
+
+        $this->dispatch('notify', 'Logged out of all other sessions.');
     }
 
     public function render()
@@ -181,495 +373,734 @@ new class extends Component
         $user = Auth::user();
         $blacklistedTags = $user ? $user->blacklistedTags()->get() : collect();
         $blockedUsers = $user ? $user->blockedUsers()->orderBy('username')->get() : collect();
+        $sessions = $user
+            ? DB::table('sessions')->where('user_id', $user->id)->orderByDesc('last_activity')->get()
+            : collect();
+
+        $allNavItems = [
+            ['id' => 'account', 'label' => 'Account', 'icon' => '👤', 'group' => 'YOUR ACCOUNT'],
+            ['id' => 'profile', 'label' => 'Profile', 'icon' => '🖼️', 'group' => 'YOUR ACCOUNT'],
+            ['id' => 'privacy', 'label' => 'Privacy & Safety', 'icon' => '🔒', 'group' => 'YOUR ACCOUNT'],
+            ['id' => 'security', 'label' => 'Security & Passwords', 'icon' => '🔑', 'group' => 'YOUR ACCOUNT'],
+
+            ['id' => 'content', 'label' => 'Content & Ratings', 'icon' => '👁️', 'group' => 'CONTENT'],
+            ['id' => 'feed', 'label' => 'Feed & Discovery', 'icon' => '✨', 'group' => 'CONTENT'],
+            ['id' => 'tags', 'label' => 'Tags & Filters', 'icon' => '🏷️', 'group' => 'CONTENT'],
+            ['id' => 'collections', 'label' => 'Collections', 'icon' => '📚', 'group' => 'CONTENT'],
+
+            ['id' => 'messages', 'label' => 'Direct & Group Messages', 'icon' => '💬', 'group' => 'COMMUNICATION'],
+            ['id' => 'lounges', 'label' => 'Lounges', 'icon' => '🛋️', 'group' => 'COMMUNICATION'],
+            ['id' => 'notifications', 'label' => 'Notifications', 'icon' => '🔔', 'group' => 'COMMUNICATION'],
+
+            ['id' => 'uploads', 'label' => 'Uploads & Media', 'icon' => '▶️', 'group' => 'PREFERENCES'],
+            ['id' => 'appearance', 'label' => 'Appearance & Theme', 'icon' => '◐', 'group' => 'PREFERENCES'],
+            ['id' => 'accessibility', 'label' => 'Accessibility', 'icon' => '♿', 'group' => 'PREFERENCES'],
+
+            ['id' => 'blocked', 'label' => 'Blocked & Muted', 'icon' => '🚫', 'group' => 'DATA & PRIVACY'],
+            ['id' => 'sessions', 'label' => 'Active Sessions', 'icon' => '💻', 'group' => 'DATA & PRIVACY'],
+        ];
+
+        $q = mb_strtolower(trim($this->searchQuery));
+        if ($q !== '') {
+            $filteredNavItems = array_filter($allNavItems, function ($item) use ($q) {
+                return str_contains(mb_strtolower($item['label']), $q)
+                    || str_contains(mb_strtolower($item['id']), $q)
+                    || str_contains(mb_strtolower($item['group']), $q);
+            });
+        } else {
+            $filteredNavItems = $allNavItems;
+        }
 
         return view('components.⚡settings-view', [
             'currentUser' => $user,
             'blacklistedTags' => $blacklistedTags,
             'blockedUsers' => $blockedUsers,
+            'sessions' => $sessions,
+            'navItems' => $filteredNavItems,
+            'allNavItems' => $allNavItems,
         ]);
     }
 };
 ?>
 
-<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <div class="mb-6">
-        <h1 class="text-2xl font-black tracking-tight text-[var(--text-main)]">Settings</h1>
-        <p class="text-xs text-[var(--text-dim)]">Customize your display theme, content filtering, and profile preferences.</p>
+<div class="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 py-4 sm:py-6 min-h-screen">
+    
+    <!-- Top Bar with Back Link -->
+    <div class="mb-4 sm:mb-6 flex items-center justify-between gap-4 border-b border-[var(--border-subtle)] pb-4">
+        <div class="flex items-center gap-3">
+            <a href="{{ route('gallery') }}" class="group flex items-center gap-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] px-3 py-1.5 text-xs font-bold text-[var(--text-main)] transition hover:accent-bg hover:text-white">
+                <svg class="h-4 w-4 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                <span>Back to Site</span>
+            </a>
+            <div>
+                <h1 class="text-xl sm:text-2xl font-black tracking-tight text-[var(--text-main)]">Settings</h1>
+                <p class="hidden sm:block text-xs text-[var(--text-dim)]">Manage your preferences, privacy, feeds, and appearance.</p>
+            </div>
+        </div>
     </div>
 
-    <!-- Twitter-Style 2-Pane Settings Layout (Category List + Detail) -->
-    <div class="rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-xl overflow-hidden grid grid-cols-1 md:grid-cols-12 min-h-[600px]">
-        <!-- Left Pane: Categories -->
-        <div class="md:col-span-4 border-r border-[var(--border-subtle)] p-3 space-y-1 bg-[var(--bg-surface)]">
-            <!-- Display & Theme -->
-            <button wire:click="setCategory('display')" 
-                    class="flex items-center gap-3 w-full px-4 py-3.5 rounded-2xl text-sm font-bold text-left transition {{ $activeCategory === 'display' ? 'accent-bg text-white shadow' : 'text-[var(--text-muted)] hover:bg-[var(--bg-surface-elevated)] hover:text-[var(--text-main)]' }}">
-                <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
-                </svg>
-                <div class="flex-1 truncate">Display & Theming</div>
-            </button>
+    <!-- Responsive Settings Container -->
+    <div class="rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-2xl overflow-hidden grid grid-cols-1 md:grid-cols-12 xl:grid-cols-12 min-h-[640px]">
+        
+        <!-- ========================================================================= -->
+        <!-- 1. LEFT SIDEBAR: CATEGORIES LIST (Visible on md+ or when mobileScreen = list) -->
+        <!-- ========================================================================= -->
+        <div class="{{ $mobileScreen === 'detail' ? 'hidden md:block' : 'block' }} md:col-span-4 xl:col-span-3 border-r border-[var(--border-subtle)] p-3 space-y-3 bg-[var(--bg-surface)] overflow-y-auto max-h-[800px]">
+            
+            <!-- Search Bar -->
+            <div class="relative">
+                <input type="text" 
+                       wire:model.live.debounce.150ms="searchQuery" 
+                       placeholder="🔍 Search Settings..." 
+                       class="w-full px-3.5 py-2 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)] outline-none placeholder:text-[var(--text-dim)] focus:border-[var(--accent-primary)] transition">
+            </div>
 
-            <!-- Content Filters & Tag Blacklist -->
-            <button wire:click="setCategory('content')" 
-                    class="flex items-center gap-3 w-full px-4 py-3.5 rounded-2xl text-sm font-bold text-left transition {{ $activeCategory === 'content' ? 'accent-bg text-white shadow' : 'text-[var(--text-muted)] hover:bg-[var(--bg-surface-elevated)] hover:text-[var(--text-main)]' }}">
-                <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-                </svg>
-                <div class="flex-1 truncate">Content Filters & Blacklist</div>
-            </button>
+            <!-- Categorized Navigation List -->
+            @php
+                $currentGroup = '';
+            @endphp
 
-            <!-- Account -->
-            <button wire:click="setCategory('account')" 
-                    class="flex items-center gap-3 w-full px-4 py-3.5 rounded-2xl text-sm font-bold text-left transition {{ $activeCategory === 'account' ? 'accent-bg text-white shadow' : 'text-[var(--text-muted)] hover:bg-[var(--bg-surface-elevated)] hover:text-[var(--text-main)]' }}">
-                <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                </svg>
-                <div class="flex-1 truncate">Account Profile</div>
-            </button>
+            <div class="space-y-3">
+                @forelse($navItems as $item)
+                    @if($item['group'] !== $currentGroup)
+                        @php $currentGroup = $item['group']; @endphp
+                        <div class="px-2 pt-2 text-[10px] font-black uppercase tracking-wider text-[var(--text-dim)]">
+                            {{ $currentGroup }}
+                        </div>
+                    @endif
 
-            <!-- Notifications Preferences -->
-            <button wire:click="setCategory('notifications')" 
-                    class="flex items-center gap-3 w-full px-4 py-3.5 rounded-2xl text-sm font-bold text-left transition {{ $activeCategory === 'notifications' ? 'accent-bg text-white shadow' : 'text-[var(--text-muted)] hover:bg-[var(--bg-surface-elevated)] hover:text-[var(--text-main)]' }}">
-                <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
-                </svg>
-                <div class="flex-1 truncate">Notifications</div>
-            </button>
-
-            <!-- Media & Autoplay -->
-            <button wire:click="setCategory('media')" 
-                    class="flex items-center gap-3 w-full px-4 py-3.5 rounded-2xl text-sm font-bold text-left transition {{ $activeCategory === 'media' ? 'accent-bg text-white shadow' : 'text-[var(--text-muted)] hover:bg-[var(--bg-surface-elevated)] hover:text-[var(--text-main)]' }}">
-                <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                <div class="flex-1 truncate">Media & Autoplay</div>
-            </button>
-
-            <!-- Artist & Commissions -->
-            <button wire:click="setCategory('artist')" 
-                    class="flex items-center gap-3 w-full px-4 py-3.5 rounded-2xl text-sm font-bold text-left transition {{ $activeCategory === 'artist' ? 'accent-bg text-white shadow' : 'text-[var(--text-muted)] hover:bg-[var(--bg-surface-elevated)] hover:text-[var(--text-main)]' }}">
-                <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
-                </svg>
-                <div class="flex-1 truncate">Artist & Commissions</div>
-            </button>
-
-            <!-- Privacy & Security -->
-            <button wire:click="setCategory('privacy')" 
-                    class="flex items-center gap-3 w-full px-4 py-3.5 rounded-2xl text-sm font-bold text-left transition {{ $activeCategory === 'privacy' ? 'accent-bg text-white shadow' : 'text-[var(--text-muted)] hover:bg-[var(--bg-surface-elevated)] hover:text-[var(--text-main)]' }}">
-                <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
-                </svg>
-                <div class="flex-1 truncate">Privacy & Security</div>
-            </button>
+                    <button wire:click="setCategory('{{ $item['id'] }}')" 
+                            class="flex items-center justify-between w-full px-3.5 py-3 sm:py-2.5 rounded-2xl text-xs font-extrabold text-left transition cursor-pointer min-h-[44px] {{ $activeCategory === $item['id'] ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:bg-[var(--bg-surface-elevated)] hover:text-[var(--text-main)]' }}">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <span class="text-base shrink-0">{{ $item['icon'] }}</span>
+                            <span class="truncate">{{ $item['label'] }}</span>
+                        </div>
+                        <span class="text-xs opacity-50 md:hidden">›</span>
+                    </button>
+                @empty
+                    <p class="p-4 text-center text-xs text-[var(--text-dim)]">No settings matching "{{ $searchQuery }}"</p>
+                @endforelse
+            </div>
         </div>
 
-        <!-- Right Pane: Details & Controls -->
-        <div class="md:col-span-8 p-6 sm:p-8 space-y-8 bg-[var(--bg-page)]/40 overflow-y-auto">
-            <!-- 1. Display & Theming Category -->
-            @if($activeCategory === 'display')
+        <!-- ========================================================================= -->
+        <!-- 2. MIDDLE / MAIN CONTENT PANEL (Visible on md+ or when mobileScreen = detail) -->
+        <!-- ========================================================================= -->
+        <div class="{{ $mobileScreen === 'list' ? 'hidden md:block' : 'block' }} md:col-span-8 xl:col-span-6 p-4 sm:p-6 bg-[var(--bg-surface-elevated)] overflow-y-auto max-h-[800px] border-r border-[var(--border-subtle)]">
+            
+            <!-- Mobile Sticky Back Header (< 768px) -->
+            <div class="md:hidden flex items-center gap-2 pb-4 mb-4 border-b border-[var(--border-subtle)]">
+                <button wire:click="backToMobileList" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-main)]">
+                    <span>‹ Settings</span>
+                </button>
+                <h2 class="text-sm font-black text-[var(--text-main)] truncate capitalize">
+                    {{ str_replace('_', ' ', $activeCategory) }}
+                </h2>
+            </div>
+
+            {{-- 1. ACCOUNT --}}
+            @if($activeCategory === 'account')
                 <div class="space-y-6">
                     <div>
-                        <h2 class="text-xl font-bold">Display & Theming</h2>
-                        <p class="text-xs text-[var(--text-dim)] mt-1">Manage dark mode, OLED true black, and curated color palettes.</p>
+                        <h2 class="text-lg font-black text-[var(--text-main)]">Account Settings</h2>
+                        <p class="text-xs text-[var(--text-dim)]">Manage your username, primary email, language, and regional preferences.</p>
                     </div>
 
-                    <!-- Background Mode (Dark, OLED, Light) -->
-                    <div class="space-y-3">
-                        <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Theme Mode</label>
-                        <div class="grid grid-cols-3 gap-3">
-                            <button wire:click="updateTheme('dark', '{{ $themePalette }}')" 
-                                    class="p-4 rounded-2xl border text-center transition {{ $themeMode === 'dark' ? 'accent-border bg-[var(--accent-glow)] font-bold text-[var(--text-main)]' : 'border-[var(--border-subtle)] hover:bg-[var(--bg-surface-elevated)] text-[var(--text-muted)]' }}">
-                                <div class="w-6 h-6 rounded-full bg-slate-900 border border-slate-700 mx-auto mb-2"></div>
-                                <span class="text-xs">Dark (Default)</span>
-                            </button>
-
-                            <button wire:click="updateTheme('oled', '{{ $themePalette }}')" 
-                                    class="p-4 rounded-2xl border text-center transition {{ $themeMode === 'oled' ? 'accent-border bg-[var(--accent-glow)] font-bold text-[var(--text-main)]' : 'border-[var(--border-subtle)] hover:bg-[var(--bg-surface-elevated)] text-[var(--text-muted)]' }}">
-                                <div class="w-6 h-6 rounded-full bg-black border border-neutral-700 mx-auto mb-2"></div>
-                                <span class="text-xs">OLED True Black</span>
-                            </button>
-
-                            <button wire:click="updateTheme('light', '{{ $themePalette }}')" 
-                                    class="p-4 rounded-2xl border text-center transition {{ $themeMode === 'light' ? 'accent-border bg-[var(--accent-glow)] font-bold text-[var(--text-main)]' : 'border-[var(--border-subtle)] hover:bg-[var(--bg-surface-elevated)] text-[var(--text-muted)]' }}">
-                                <div class="w-6 h-6 rounded-full bg-white border border-slate-300 mx-auto mb-2"></div>
-                                <span class="text-xs">Light Mode</span>
-                            </button>
+                    <form wire:submit.prevent="saveAccount" class="space-y-4">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Username</label>
+                                <input type="text" wire:model="username" class="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]">
+                                @error('username') <span class="text-[11px] text-rose-400">{{ $message }}</span> @enderror
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Display Name</label>
+                                <input type="text" wire:model="name" class="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]">
+                                @error('name') <span class="text-[11px] text-rose-400">{{ $message }}</span> @enderror
+                            </div>
                         </div>
-                    </div>
 
-                    <!-- 6 Curated Color Palettes -->
-                    <div class="space-y-3">
-                        <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Accent Palette (6 Curated Options)</label>
-                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                            @php
-                                $palettes = [
-                                    ['id' => 'violet', 'name' => 'Electric Violet', 'color' => '#8b5cf6'],
-                                    ['id' => 'cyan', 'name' => 'Cyber Cyan', 'color' => '#06b6d4'],
-                                    ['id' => 'sakura', 'name' => 'Sakura Rose', 'color' => '#ec4899'],
-                                    ['id' => 'emerald', 'name' => 'Emerald Mint', 'color' => '#10b981'],
-                                    ['id' => 'sunset', 'name' => 'Sunset Amber', 'color' => '#f97316'],
-                                    ['id' => 'crimson', 'name' => 'Ruby Crimson', 'color' => '#ef4444'],
-                                ];
-                            @endphp
-
-                            @foreach($palettes as $p)
-                                <button wire:click="updateTheme('{{ $themeMode }}', '{{ $p['id'] }}')" 
-                                        class="flex items-center gap-3 p-3 rounded-2xl border transition text-left {{ $themePalette === $p['id'] ? 'accent-border bg-[var(--accent-glow)] font-bold' : 'border-[var(--border-subtle)] hover:bg-[var(--bg-surface-elevated)]' }}">
-                                    <span class="w-6 h-6 rounded-full shrink-0 shadow-sm" style="background-color: {{ $p['color'] }};"></span>
-                                    <span class="text-xs truncate">{{ $p['name'] }}</span>
-                                </button>
-                            @endforeach
-                        </div>
-                    </div>
-
-                    <!-- Font Scaling -->
-                    <div class="space-y-3">
-                        <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Font Scaling</label>
-                        <div class="flex items-center gap-3">
-                            <button wire:click="updateFontSize('sm')" class="px-4 py-2 rounded-xl border text-xs font-semibold {{ $fontSize === 'sm' ? 'accent-bg text-white font-bold' : 'border-[var(--border-subtle)] hover:bg-[var(--bg-surface-elevated)]' }}">Small</button>
-                            <button wire:click="updateFontSize('md')" class="px-4 py-2 rounded-xl border text-xs font-semibold {{ $fontSize === 'md' ? 'accent-bg text-white font-bold' : 'border-[var(--border-subtle)] hover:bg-[var(--bg-surface-elevated)]' }}">Medium (Default)</button>
-                            <button wire:click="updateFontSize('lg')" class="px-4 py-2 rounded-xl border text-xs font-semibold {{ $fontSize === 'lg' ? 'accent-bg text-white font-bold' : 'border-[var(--border-subtle)] hover:bg-[var(--bg-surface-elevated)]' }}">Large</button>
-                        </div>
-                    </div>
-
-                    <!-- Reduced Motion -->
-                    <div class="flex items-center justify-between p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
                         <div>
-                            <div class="font-bold text-sm">Reduced Motion</div>
-                            <div class="text-xs text-[var(--text-dim)] mt-0.5">Minimizes smooth animations and transitions across the gallery.</div>
+                            <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Email Address</label>
+                            <input type="email" wire:model="email" class="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]">
+                            @error('email') <span class="text-[11px] text-rose-400">{{ $message }}</span> @enderror
                         </div>
-                        <button wire:click="toggleReducedMotion" class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out {{ $reducedMotion ? 'accent-bg' : 'bg-neutral-700' }}">
-                            <span class="inline-block h-5 w-5 transform rounded-full bg-white transition duration-200 ease-in-out {{ $reducedMotion ? 'translate-x-5' : 'translate-x-0' }}"></span>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Language</label>
+                                <select wire:model="language" class="w-full px-3 py-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]">
+                                    <option value="en">English (US)</option>
+                                    <option value="ja">日本語 (Japanese)</option>
+                                    <option value="es">Español</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Region</label>
+                                <select wire:model="region" class="w-full px-3 py-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]">
+                                    <option value="US">United States</option>
+                                    <option value="JP">Japan</option>
+                                    <option value="EU">Europe</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Time Zone</label>
+                                <select wire:model="timezone" class="w-full px-3 py-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]">
+                                    <option value="UTC">UTC (GMT+0)</option>
+                                    <option value="America/New_York">EST (GMT-5)</option>
+                                    <option value="Asia/Tokyo">JST (GMT+9)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="w-full sm:w-auto min-h-[44px] px-6 py-2.5 rounded-xl accent-bg text-white text-xs font-extrabold shadow-md cursor-pointer">
+                            Save Account Changes
+                        </button>
+                    </form>
+                </div>
+            @endif
+
+            {{-- 2. PROFILE --}}
+            @if($activeCategory === 'profile')
+                <div class="space-y-6">
+                    <div>
+                        <h2 class="text-lg font-black text-[var(--text-main)]">Profile Customization</h2>
+                        <p class="text-xs text-[var(--text-dim)]">Customize your public bio, social links, and public profile visibility throughout the gallery and lounges.</p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Bio</label>
+                            <textarea wire:model="bio" rows="3" class="w-full p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]" placeholder="Tell the community about yourself..."></textarea>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Website / Portfolio Link</label>
+                            <input type="url" wire:model="website" class="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]" placeholder="https://yourportfolio.art">
+                        </div>
+
+                        <div class="space-y-3 pt-4 border-t border-[var(--border-subtle)]">
+                            <h3 class="text-xs font-bold text-[var(--text-main)]">Public Profile Modules</h3>
+
+                            <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                                <input type="checkbox" wire:model="showJoinDate" class="w-4 h-4 rounded accent-bg">
+                                <span class="text-xs text-[var(--text-main)]">Show Join Date on profile</span>
+                            </label>
+
+                            <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                                <input type="checkbox" wire:model="showFollowerCount" class="w-4 h-4 rounded accent-bg">
+                                <span class="text-xs text-[var(--text-main)]">Show Follower count</span>
+                            </label>
+
+                            <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                                <input type="checkbox" wire:model="showLikesTab" class="w-4 h-4 rounded accent-bg">
+                                <span class="text-xs text-[var(--text-main)]">Show Likes tab to visitors</span>
+                            </label>
+
+                            <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                                <input type="checkbox" wire:model="showCollectionsTab" class="w-4 h-4 rounded accent-bg">
+                                <span class="text-xs text-[var(--text-main)]">Show Collections tab to visitors</span>
+                            </label>
+                        </div>
+
+                        <button wire:click="saveAccount" class="w-full sm:w-auto min-h-[44px] px-6 py-2.5 rounded-xl accent-bg text-white text-xs font-extrabold shadow-md cursor-pointer">
+                            Save Profile Preferences
                         </button>
                     </div>
                 </div>
             @endif
 
-            <!-- 2. Content Filters & Tag Blacklist Category -->
-            @if($activeCategory === 'content')
+            {{-- 3. PRIVACY & SAFETY --}}
+            @if($activeCategory === 'privacy')
                 <div class="space-y-6">
                     <div>
-                        <h2 class="text-xl font-bold">Content Filters & Blacklist</h2>
-                        <p class="text-xs text-[var(--text-dim)] mt-1">Control NSFW media visibility and blacklist specific tags.</p>
+                        <h2 class="text-lg font-black text-[var(--text-main)]">Privacy & Safety</h2>
+                        <p class="text-xs text-[var(--text-dim)]">Control who can follow you, leave comments, mention your username, or see your activity.</p>
                     </div>
 
-                    <!-- NSFW Toggles -->
-                    <div class="space-y-3">
-                        <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">NSFW Preferences</label>
-                        <div class="space-y-2">
-                            <label class="flex items-center justify-between p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] cursor-pointer">
-                                <div>
-                                    <div class="font-bold text-sm">Blur NSFW Content</div>
-                                    <div class="text-xs text-[var(--text-dim)] mt-0.5">Show mature media with a click-to-reveal blur overlay.</div>
-                                </div>
-                                <input type="checkbox" wire:model.live="blurNsfw" wire:change="updateContentFilters" class="w-5 h-5 rounded accent-bg">
-                            </label>
-
-                            <label class="flex items-center justify-between p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] cursor-pointer">
-                                <div>
-                                    <div class="font-bold text-sm">Completely Hide NSFW Content</div>
-                                    <div class="text-xs text-[var(--text-dim)] mt-0.5">Exclude all mature tagged posts from appearing in your feed.</div>
-                                </div>
-                                <input type="checkbox" wire:model.live="hideNsfw" wire:change="updateContentFilters" class="w-5 h-5 rounded accent-bg">
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Tag Blacklist -->
-                    <div class="space-y-3">
-                        <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Tag Blacklist</label>
-                        <p class="text-xs text-[var(--text-dim)]">Posts matching blacklisted tags will be filtered based on your preference.</p>
-
-                        <div class="flex items-center gap-2">
-                            <input type="text" 
-                                   wire:model="newBlacklistTag"
-                                   wire:keydown.enter="addBlacklistTag"
-                                   placeholder="Add tag to blacklist (e.g. spoilers, gore)..." 
-                                   class="flex-1 p-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-sm outline-none focus:border-[var(--accent-primary)]">
-                            <button wire:click="addBlacklistTag" class="px-5 py-3 rounded-2xl accent-bg text-white font-bold text-xs shadow">
-                                Add Tag
-                            </button>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Who can follow me?</label>
+                            <select wire:model="whoCanFollow" class="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]">
+                                <option value="everyone">Everyone (Instant Follow)</option>
+                                <option value="approval">Approval Required (Follow Requests)</option>
+                            </select>
                         </div>
 
-                        <!-- Blacklisted Tag Chips -->
-                        <div class="flex flex-wrap gap-2 pt-2">
-                            @forelse($blacklistedTags as $bt)
-                                <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-bold">
-                                    <span>#{{ $bt->name }}</span>
-                                    <button wire:click="removeBlacklistTag({{ $bt->id }})" class="hover:text-rose-200">×</button>
-                                </div>
-                            @empty
-                                <p class="text-xs text-[var(--text-dim)]">No tags currently blacklisted.</p>
-                            @endforelse
+                        <div>
+                            <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Who can comment on my uploads?</label>
+                            <select wire:model="whoCanComment" class="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]">
+                                <option value="everyone">Everyone</option>
+                                <option value="followers">Followers Only</option>
+                                <option value="following">People I Follow Only</option>
+                                <option value="nobody">Nobody</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Who can mention me?</label>
+                            <select wire:model="whoCanMention" class="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]">
+                                <option value="everyone">Everyone</option>
+                                <option value="following">People I Follow Only</option>
+                                <option value="nobody">Nobody</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Who can see my Likes?</label>
+                            <select wire:model="likesVisibility" class="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]">
+                                <option value="everyone">Everyone</option>
+                                <option value="followers">Followers Only</option>
+                                <option value="only_me">Only Me</option>
+                            </select>
                         </div>
                     </div>
                 </div>
             @endif
 
-            <!-- 3. Account Settings Category -->
-            @if($activeCategory === 'account')
+            {{-- 4. CONTENT & RATINGS --}}
+            @if($activeCategory === 'content')
                 <div class="space-y-6">
                     <div>
-                        <h2 class="text-xl font-bold">Account Profile</h2>
-                        <p class="text-xs text-[var(--text-dim)] mt-1">Update your artist identity, bio, and commission status.</p>
+                        <h2 class="text-lg font-black text-[var(--text-main)]">Content Filters & Ratings</h2>
+                        <p class="text-xs text-[var(--text-dim)]">Set rating tolerances and thumbnail blur options for sensitive booru content.</p>
                     </div>
 
-                    <form wire:submit.prevent="saveAccount" class="space-y-4">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Display Name</label>
-                                <input type="text" wire:model="name" class="w-full mt-1 p-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-sm outline-none focus:border-[var(--accent-primary)]">
-                            </div>
-                            <div>
-                                <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Username</label>
-                                <input type="text" wire:model="username" class="w-full mt-1 p-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-sm outline-none focus:border-[var(--accent-primary)]">
-                            </div>
+                    <div class="space-y-4">
+                        <div class="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3">
+                            <h3 class="text-xs font-bold text-[var(--text-main)]">Booru Rating Eligibility</h3>
+                            <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                                <input type="checkbox" wire:model="ratingSafe" class="w-4 h-4 rounded accent-bg">
+                                <span class="text-xs font-semibold text-emerald-400">Safe (SFW Content)</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                                <input type="checkbox" wire:model="ratingQuestionable" class="w-4 h-4 rounded accent-bg">
+                                <span class="text-xs font-semibold text-amber-400">Questionable (Ecchi & Mild Content)</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                                <input type="checkbox" wire:model="ratingExplicit" class="w-4 h-4 rounded accent-bg">
+                                <span class="text-xs font-semibold text-rose-400">Explicit (NSFW 18+ Content)</span>
+                            </label>
+                        </div>
+
+                        <div class="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3">
+                            <h3 class="text-xs font-bold text-[var(--text-main)]">Sensitive Thumbnail Behavior</h3>
+                            <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                                <input type="checkbox" wire:model="blurNsfw" wire:change="updateContentFilters" class="w-4 h-4 rounded accent-bg">
+                                <span class="text-xs text-[var(--text-main)]">Blur sensitive images until hovered/clicked</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                                <input type="checkbox" wire:model="hideNsfw" wire:change="updateContentFilters" class="w-4 h-4 rounded accent-bg">
+                                <span class="text-xs text-[var(--text-main)]">Completely hide sensitive content from search & feed</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            @endif
+
+            {{-- 5. FEED & DISCOVERY --}}
+            @if($activeCategory === 'feed')
+                <div class="space-y-6">
+                    <div>
+                        <h2 class="text-lg font-black text-[var(--text-main)]">Feed & Discovery Recommendation Signals</h2>
+                        <p class="text-xs text-[var(--text-dim)]">Control how the algorithm builds your personalized For You feed and Following stream.</p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3">
+                            <h3 class="text-xs font-bold text-[var(--text-main)]">Signals Used for For You Feed</h3>
+                            <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                                <input type="checkbox" wire:model="feedUseLikes" class="w-4 h-4 rounded accent-bg">
+                                <span class="text-xs text-[var(--text-main)]">Include liked posts</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                                <input type="checkbox" wire:model="feedUseFollowedTags" class="w-4 h-4 rounded accent-bg">
+                                <span class="text-xs text-[var(--text-main)]">Include followed tags & artists</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                                <input type="checkbox" wire:model="feedUseRecentlyViewed" class="w-4 h-4 rounded accent-bg">
+                                <span class="text-xs text-[var(--text-main)]">Include recently viewed posts</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            @endif
+
+            {{-- 6. MESSAGES --}}
+            @if($activeCategory === 'messages')
+                <div class="space-y-6">
+                    <div>
+                        <h2 class="text-lg font-black text-[var(--text-main)]">Direct & Group Messaging Settings</h2>
+                        <p class="text-xs text-[var(--text-dim)]">Configure private conversation permissions, message requests, and chat status.</p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Who can DM me?</label>
+                            <select wire:model="whoCanDm" class="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]">
+                                <option value="everyone">Everyone</option>
+                                <option value="following">People I Follow</option>
+                                <option value="mutuals">Mutual Follows Only</option>
+                                <option value="nobody">Nobody</option>
+                            </select>
                         </div>
 
                         <div>
-                            <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Email Address</label>
-                            <input type="email" wire:model="email" class="w-full mt-1 p-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-sm outline-none focus:border-[var(--accent-primary)]">
+                            <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Who can add me to Group DMs?</label>
+                            <select wire:model="whoCanAddGroupDm" class="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]">
+                                <option value="everyone">Everyone</option>
+                                <option value="following">People I Follow</option>
+                                <option value="mutuals">Mutual Follows Only</option>
+                            </select>
                         </div>
 
+                        <div class="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3">
+                            <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                                <input type="checkbox" wire:model="routeUnknownToRequests" class="w-4 h-4 rounded accent-bg">
+                                <span class="text-xs font-semibold text-[var(--text-main)]">Send unknown user DMs to Message Requests inbox</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                                <input type="checkbox" wire:model="showOnlineStatus" class="w-4 h-4 rounded accent-bg">
+                                <span class="text-xs text-[var(--text-main)]">Show Online Presence Status</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                                <input type="checkbox" wire:model="showTypingIndicator" class="w-4 h-4 rounded accent-bg">
+                                <span class="text-xs text-[var(--text-main)]">Show Typing Indicator when writing messages</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                                <input type="checkbox" wire:model="sendReadReceipts" class="w-4 h-4 rounded accent-bg">
+                                <span class="text-xs text-[var(--text-main)]">Send Read Receipts</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            @endif
+
+            {{-- 7. LOUNGES --}}
+            @if($activeCategory === 'lounges')
+                <div class="space-y-6">
+                    <div>
+                        <h2 class="text-lg font-black text-[var(--text-main)]">Lounge Preferences</h2>
+                        <p class="text-xs text-[var(--text-dim)]">Manage default upload behaviors and global community server notifications.</p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3">
+                            <h3 class="text-xs font-bold text-[var(--text-main)]">Default Lounge Upload Mode</h3>
+                            <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                                <input type="radio" wire:model="loungeUploadDefault" value="lounge_only" class="w-4 h-4 accent-bg">
+                                <span class="text-xs text-[var(--text-main)] font-bold">Lounge Only by Default (Casual chat media, no tags required)</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                                <input type="radio" wire:model="loungeUploadDefault" value="remember" class="w-4 h-4 accent-bg">
+                                <span class="text-xs text-[var(--text-main)]">Remember Last Upload Choice</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                                <input type="radio" wire:model="loungeUploadDefault" value="ask" class="w-4 h-4 accent-bg">
+                                <span class="text-xs text-[var(--text-main)]">Prompt every time media is attached</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            @endif
+
+            {{-- 8. NOTIFICATIONS --}}
+            @if($activeCategory === 'notifications')
+                <div class="space-y-6">
+                    <div>
+                        <h2 class="text-lg font-black text-[var(--text-main)]">Notification Preferences</h2>
+                        <p class="text-xs text-[var(--text-dim)]">Choose what events notify you and how they are delivered.</p>
+                    </div>
+
+                    <div class="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3">
+                        <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                            <input type="checkbox" wire:model="notifyFollows" class="w-4 h-4 rounded accent-bg">
+                            <span class="text-xs text-[var(--text-main)]">New followers & follow requests</span>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                            <input type="checkbox" wire:model="notifyLikes" class="w-4 h-4 rounded accent-bg">
+                            <span class="text-xs text-[var(--text-main)]">Likes on your posts</span>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                            <input type="checkbox" wire:model="notifyComments" class="w-4 h-4 rounded accent-bg">
+                            <span class="text-xs text-[var(--text-main)]">Comments & replies</span>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                            <input type="checkbox" wire:model="notifyDirectMessages" class="w-4 h-4 rounded accent-bg">
+                            <span class="text-xs text-[var(--text-main)]">Direct messages & group invites</span>
+                        </label>
+                    </div>
+                </div>
+            @endif
+
+            {{-- 9. UPLOADS & MEDIA --}}
+            @if($activeCategory === 'uploads')
+                <div class="space-y-6">
+                    <div>
+                        <h2 class="text-lg font-black text-[var(--text-main)]">Uploads & Media Defaults</h2>
+                        <p class="text-xs text-[var(--text-dim)]">Set default ratings and comments settings for new gallery posts.</p>
+                    </div>
+
+                    <div class="space-y-4">
                         <div>
-                            <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Bio</label>
-                            <textarea wire:model="bio" rows="3" class="w-full mt-1 p-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-sm outline-none focus:border-[var(--accent-primary)]"></textarea>
+                            <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Default Rating</label>
+                            <select wire:model="defaultRating" class="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]">
+                                <option value="Safe">Safe (SFW)</option>
+                                <option value="Questionable">Questionable</option>
+                                <option value="Explicit">Explicit (NSFW)</option>
+                            </select>
                         </div>
+                        <div>
+                            <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Default Visibility</label>
+                            <select wire:model="defaultVisibility" class="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]">
+                                <option value="Public">Public</option>
+                                <option value="Unlisted">Unlisted</option>
+                                <option value="Private">Private</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            @endif
 
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {{-- 10. TAGS & FILTERS --}}
+            @if($activeCategory === 'tags')
+                <div class="space-y-6">
+                    <div>
+                        <h2 class="text-lg font-black text-[var(--text-main)]">Muted Tags & Content Filters</h2>
+                        <p class="text-xs text-[var(--text-dim)]">Add tags to your personal blacklist to exclude matching artwork across the site.</p>
+                    </div>
+
+                    <form wire:submit.prevent="addMutedTag" class="flex gap-2">
+                        <input type="text" wire:model="newMutedTag" placeholder="e.g. spoiler, horror, ai_generated" class="flex-1 px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]">
+                        <button type="submit" class="px-4 py-2.5 rounded-xl accent-bg text-white text-xs font-bold min-h-[44px]">Mute Tag</button>
+                    </form>
+
+                    <div class="flex flex-wrap gap-2">
+                        @forelse($blacklistedTags as $tag)
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 text-xs font-bold">
+                                #{{ $tag->name }}
+                                <button type="button" wire:click="removeMutedTag({{ $tag->id }})" class="hover:text-white">✕</button>
+                            </span>
+                        @empty
+                            <p class="text-xs text-[var(--text-dim)] italic">No muted tags currently active.</p>
+                        @endforelse
+                    </div>
+                </div>
+            @endif
+
+            {{-- 11. COLLECTIONS --}}
+            @if($activeCategory === 'collections')
+                <div class="space-y-6">
+                    <div>
+                        <h2 class="text-lg font-black text-[var(--text-main)]">Collection Defaults</h2>
+                        <p class="text-xs text-[var(--text-dim)]">Set default privacy for new art collections and series folders.</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Default Visibility for New Collections</label>
+                        <select wire:model="defaultCollectionVisibility" class="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]">
+                            <option value="Private">Private (Only Me & Invited Collaborators)</option>
+                            <option value="Unlisted">Unlisted (Anyone with Link)</option>
+                            <option value="Public">Public (Discoverable & Shareable)</option>
+                        </select>
+                    </div>
+                </div>
+            @endif
+
+            {{-- 12. APPEARANCE --}}
+            @if($activeCategory === 'appearance')
+                <div class="space-y-6">
+                    <div>
+                        <h2 class="text-lg font-black text-[var(--text-main)]">Appearance & Color Palette</h2>
+                        <p class="text-xs text-[var(--text-dim)]">Customize dark mode, accent palettes, and display font scaling.</p>
+                    </div>
+
+                    <div class="space-y-3">
+                        <h3 class="text-xs font-bold text-[var(--text-main)]">Accent Color Palette</h3>
+                        <div class="flex flex-wrap gap-3">
+                            @foreach(['violet' => 'bg-violet-600', 'emerald' => 'bg-emerald-600', 'sky' => 'bg-sky-600', 'rose' => 'bg-rose-600', 'amber' => 'bg-amber-600'] as $paletteKey => $bgClass)
+                                <button wire:click="updateTheme('dark', '{{ $paletteKey }}')" 
+                                        class="flex items-center gap-2 px-3.5 py-2.5 rounded-xl border transition min-h-[44px] cursor-pointer {{ $themePalette === $paletteKey ? 'border-white shadow-lg scale-105' : 'border-[var(--border-subtle)]' }}">
+                                    <span class="w-4 h-4 rounded-full {{ $bgClass }}"></span>
+                                    <span class="text-xs font-bold text-[var(--text-main)] capitalize">{{ $paletteKey }}</span>
+                                </button>
+                            @endforeach
+                        </div>
+                    </div>
+
+                    <div class="space-y-3">
+                        <h3 class="text-xs font-bold text-[var(--text-main)]">Text Size</h3>
+                        <div class="flex flex-wrap gap-3">
+                            @foreach(['sm' => 'Small', 'md' => 'Medium', 'lg' => 'Large'] as $sizeKey => $sizeLabel)
+                                <button wire:click="updateFontSize('{{ $sizeKey }}')"
+                                        class="flex items-center gap-2 px-3.5 py-2.5 rounded-xl border transition min-h-[44px] cursor-pointer {{ $fontSize === $sizeKey ? 'border-white shadow-lg scale-105' : 'border-[var(--border-subtle)]' }}">
+                                    <span class="text-xs font-bold text-[var(--text-main)]">{{ $sizeLabel }}</span>
+                                </button>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+            @endif
+
+            {{-- 13. ACCESSIBILITY --}}
+            @if($activeCategory === 'accessibility')
+                <div class="space-y-6">
+                    <div>
+                        <h2 class="text-lg font-black text-[var(--text-main)]">Accessibility Preferences</h2>
+                        <p class="text-xs text-[var(--text-dim)]">Interface contrast, animation reductions, and visual aid options.</p>
+                    </div>
+
+                    <div class="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3">
+                        <label class="flex items-center gap-3 cursor-pointer min-h-[44px]">
+                            <input type="checkbox" wire:model="reducedMotion" wire:change="toggleReducedMotion" class="w-4 h-4 rounded accent-bg">
+                            <span class="text-xs text-[var(--text-main)]">Reduce UI Animations & Motion</span>
+                        </label>
+                    </div>
+                </div>
+            @endif
+
+            {{-- 14. SECURITY --}}
+            @if($activeCategory === 'security')
+                <div class="space-y-6">
+                    <div>
+                        <h2 class="text-lg font-black text-[var(--text-main)]">Security & Password</h2>
+                        <p class="text-xs text-[var(--text-dim)]">Update your password and manage account security settings.</p>
+                    </div>
+
+                    <form wire:submit.prevent="changePassword" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Current Password</label>
+                            <input type="password" wire:model="currentPassword" class="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]">
+                            @error('currentPassword') <span class="text-[11px] text-rose-400">{{ $message }}</span> @enderror
+                        </div>
+                        <div class="space-y-4">
                             <div>
-                                <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Website</label>
-                                <input type="url" wire:model="website" class="w-full mt-1 p-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-sm outline-none focus:border-[var(--accent-primary)]">
+                                <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">New Password</label>
+                                <input type="password" wire:model="newPassword" class="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]">
+                                @error('newPassword') <span class="text-[11px] text-rose-400">{{ $message }}</span> @enderror
                             </div>
                             <div>
-                                <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Commission Status</label>
-                                <select wire:model="commissionStatus" class="w-full mt-1 p-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-sm outline-none focus:border-[var(--accent-primary)]">
-                                    <option value="Open">Open</option>
-                                    <option value="Closed">Closed</option>
-                                    <option value="Waitlist">Waitlist</option>
-                                </select>
+                                <label class="block text-xs font-bold mb-1 text-[var(--text-main)]">Confirm New Password</label>
+                                <input type="password" wire:model="newPasswordConfirmation" class="w-full px-3.5 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-main)]">
                             </div>
                         </div>
-
-                        <div class="pt-2">
-                            <button type="submit" class="px-6 py-2.5 rounded-2xl accent-bg text-white font-bold text-sm shadow hover:opacity-90 transition">
-                                Save Profile Changes
-                            </button>
-                        </div>
+                        <button type="submit" class="w-full sm:w-auto min-h-[44px] px-6 py-2.5 rounded-xl accent-bg text-white text-xs font-extrabold shadow-md cursor-pointer">Update Password</button>
                     </form>
                 </div>
             @endif
 
-            <!-- 4. Notifications Preferences -->
-            @if($activeCategory === 'notifications')
+            {{-- 15. BLOCKED & MUTED --}}
+            @if($activeCategory === 'blocked')
                 <div class="space-y-6">
                     <div>
-                        <h2 class="text-xl font-bold">Notification Preferences</h2>
-                        <p class="text-xs text-[var(--text-dim)] mt-1">Choose which events trigger notification updates.</p>
+                        <h2 class="text-lg font-black text-[var(--text-main)]">Blocked & Muted Users</h2>
+                        <p class="text-xs text-[var(--text-dim)]">Manage accounts you have blocked or muted across gallery comments and lounges.</p>
                     </div>
 
+                    <div class="space-y-2">
+                        @forelse($blockedUsers as $blocked)
+                            <div class="flex items-center justify-between p-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
+                                <div class="flex items-center gap-3">
+                                    <img src="{{ $blocked->avatar_url }}" class="w-8 h-8 rounded-full object-cover">
+                                    <div>
+                                        <div class="font-bold text-xs text-[var(--text-main)]">{{ $blocked->name }}</div>
+                                        <div class="text-[10px] text-[var(--text-dim)]">@<span>{{ $blocked->username }}</span></div>
+                                    </div>
+                                </div>
+                                <button wire:click="unblockUser({{ $blocked->id }})" class="min-h-[44px] px-3 py-1 rounded-xl bg-rose-500/15 text-rose-400 text-xs font-bold hover:bg-rose-500 hover:text-white transition">Unblock</button>
+                            </div>
+                        @empty
+                            <p class="text-xs text-[var(--text-dim)] italic">No blocked users currently.</p>
+                        @endforelse
+                    </div>
+                </div>
+            @endif
+
+            {{-- 16. SESSIONS --}}
+            @if($activeCategory === 'sessions')
+                <div class="space-y-6">
+                    <div>
+                        <h2 class="text-lg font-black text-[var(--text-main)]">Active Sessions</h2>
+                        <p class="text-xs text-[var(--text-dim)]">Devices currently logged into your account.</p>
+                    </div>
+
+                    @php($currentSessionId = session()->getId())
                     <div class="space-y-3">
-                        <label class="flex items-center justify-between p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] cursor-pointer">
-                            <div>
-                                <div class="font-bold text-sm">Followed Pools Chapters</div>
-                                <div class="text-xs text-[var(--text-dim)] mt-0.5">Notify when a new chapter is released in pools you follow.</div>
+                        @forelse($sessions as $session)
+                            @php($isCurrent = $session->id === $currentSessionId)
+                            @php($agent = $session->user_agent ?? '')
+                            @php($isMobile = (bool) preg_match('/Mobile|Android|iPhone|iPad/i', $agent))
+                            @php($browser = \Illuminate\Support\Str::contains($agent, 'Firefox') ? 'Firefox' : (\Illuminate\Support\Str::contains($agent, ['Edg', 'Chrome']) ? 'Chrome' : (\Illuminate\Support\Str::contains($agent, 'Safari') ? 'Safari' : 'Unknown browser')))
+                            <div class="flex items-center justify-between gap-3 p-4 rounded-2xl bg-[var(--bg-surface)] border {{ $isCurrent ? 'border-emerald-500/30' : 'border-[var(--border-subtle)]' }}">
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <span class="text-xl">{{ $isMobile ? '📱' : '💻' }}</span>
+                                    <div class="min-w-0">
+                                        <div class="font-bold text-xs text-[var(--text-main)] truncate">
+                                            {{ $isMobile ? 'Mobile device' : 'Desktop browser' }}
+                                            @if($isCurrent)
+                                                <span class="ml-1 text-[10px] font-bold text-emerald-400">Active now • This device</span>
+                                            @endif
+                                        </div>
+                                        <div class="text-[10px] text-[var(--text-dim)] truncate">
+                                            {{ $browser }} · {{ $session->ip_address ?: 'unknown IP' }} · Last active {{ \Illuminate\Support\Carbon::createFromTimestamp($session->last_activity)->diffForHumans() }}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <input type="checkbox" checked class="w-5 h-5 rounded accent-bg">
-                        </label>
+                        @empty
+                            <div class="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-xs text-[var(--text-dim)]">No active sessions recorded yet.</div>
+                        @endforelse
 
-                        <label class="flex items-center justify-between p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] cursor-pointer">
-                            <div>
-                                <div class="font-bold text-sm">Followed Collections Updates</div>
-                                <div class="text-xs text-[var(--text-dim)] mt-0.5">Notify when items are added to collections you follow.</div>
-                            </div>
-                            <input type="checkbox" checked class="w-5 h-5 rounded accent-bg">
-                        </label>
-
-                        <label class="flex items-center justify-between p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] cursor-pointer">
-                            <div>
-                                <div class="font-bold text-sm">Artwork Likes & Comments</div>
-                                <div class="text-xs text-[var(--text-dim)] mt-0.5">Notify when other users like or comment on your creations.</div>
-                            </div>
-                            <input type="checkbox" checked class="w-5 h-5 rounded accent-bg">
-                        </label>
+                        <button wire:click="logoutAllOtherSessions" class="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 text-xs font-extrabold hover:bg-rose-500 hover:text-white transition cursor-pointer">
+                            Log Out All Other Sessions
+                        </button>
                     </div>
                 </div>
             @endif
 
-            <!-- 5. Privacy & Security Category -->
-            @if($activeCategory === 'privacy')
-                <div class="space-y-6">
-                    <div>
-                        <h2 class="text-xl font-bold">Privacy & Security</h2>
-                        <p class="text-xs text-[var(--text-dim)] mt-1">Manage direct messaging permissions, online presence, and account security.</p>
-                    </div>
-
-                    <div class="space-y-4">
-                        <div class="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <div class="font-bold text-sm">Direct Messaging Requests</div>
-                                    <div class="text-xs text-[var(--text-dim)] mt-0.5">Allow non-followed artists to send direct message requests.</div>
-                                </div>
-                                <input type="checkbox" checked class="w-5 h-5 rounded accent-bg">
-                            </div>
-                        </div>
-
-                        <div class="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <div class="font-bold text-sm">Online & Activity Status</div>
-                                    <div class="text-xs text-[var(--text-dim)] mt-0.5">Show active status indicator on chat and profile pages.</div>
-                                </div>
-                                <input type="checkbox" checked class="w-5 h-5 rounded accent-bg">
-                            </div>
-                        </div>
-
-                        <div class="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3">
-                            <div class="font-bold text-sm">Active Sessions & Security</div>
-                            <p class="text-xs text-[var(--text-dim)]">You are logged in on Mac OS (Current Browser Session).</p>
-                            <button wire:click="$dispatch('notify', 'All other active sessions revoked')" 
-                                    class="px-4 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 font-bold text-xs hover:bg-rose-500/20 transition">
-                                Log Out Other Sessions
-                            </button>
-                        </div>
-
-                        <div class="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3">
-                            <div class="font-bold text-sm">Blocked artists</div>
-                            @forelse($blockedUsers as $blockedUser)
-                                <div class="flex items-center justify-between gap-3 border-t border-[var(--border-subtle)] pt-3">
-                                    <a href="{{ route('profile', $blockedUser->username) }}" class="text-sm font-semibold hover:underline">{{ '@'.$blockedUser->username }}</a>
-                                    <button wire:click="unblockUser({{ $blockedUser->id }})" class="text-xs font-bold text-rose-400">Unblock</button>
-                                </div>
-                            @empty
-                                <p class="text-xs text-[var(--text-dim)]">You haven’t blocked anyone.</p>
-                            @endforelse
-                        </div>
-                    </div>
-                </div>
-            @endif
-
-            <!-- 6. Media & Autoplay Category -->
-            @if($activeCategory === 'media')
-                <div class="space-y-6">
-                    <div>
-                        <h2 class="text-xl font-bold">Media & Autoplay Settings</h2>
-                        <p class="text-xs text-[var(--text-dim)] mt-1">Configure grid layout defaults, video autoplay, and slideshow speeds.</p>
-                    </div>
-
-                    <div class="space-y-4">
-                        <div class="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3">
-                            <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Default Gallery Feed Layout</label>
-                            <div class="flex items-center gap-3">
-                                <button wire:click="$set('defaultGrid', 'masonry'); $dispatch('notify', 'Masonry grid layout saved')"
-                                        class="px-4 py-2 rounded-xl border text-xs font-semibold {{ $defaultGrid === 'masonry' ? 'accent-bg text-white font-bold' : 'border-[var(--border-subtle)] hover:bg-[var(--bg-surface-elevated)]' }}">
-                                    Masonry Dynamic Height
-                                </button>
-                                <button wire:click="$set('defaultGrid', 'square'); $dispatch('notify', 'Uniform square layout saved')"
-                                        class="px-4 py-2 rounded-xl border text-xs font-semibold {{ $defaultGrid === 'square' ? 'accent-bg text-white font-bold' : 'border-[var(--border-subtle)] hover:bg-[var(--bg-surface-elevated)]' }}">
-                                    Uniform Square Grid
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3">
-                            <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Lightbox Slideshow Interval</label>
-                            <div class="flex items-center gap-2">
-                                <button wire:click="$set('slideshowDuration', 3000); $dispatch('notify', 'Slideshow set to 3 seconds')" class="px-3.5 py-2 rounded-xl border text-xs {{ $slideshowDuration === 3000 ? 'accent-bg text-white font-bold' : 'border-[var(--border-subtle)]' }}">3s</button>
-                                <button wire:click="$set('slideshowDuration', 5000); $dispatch('notify', 'Slideshow set to 5 seconds')" class="px-3.5 py-2 rounded-xl border text-xs {{ $slideshowDuration === 5000 ? 'accent-bg text-white font-bold' : 'border-[var(--border-subtle)]' }}">5s (Default)</button>
-                                <button wire:click="$set('slideshowDuration', 10000); $dispatch('notify', 'Slideshow set to 10 seconds')" class="px-3.5 py-2 rounded-xl border text-xs {{ $slideshowDuration === 10000 ? 'accent-bg text-white font-bold' : 'border-[var(--border-subtle)]' }}">10s</button>
-                                <button wire:click="$set('slideshowDuration', 15000); $dispatch('notify', 'Slideshow set to 15 seconds')" class="px-3.5 py-2 rounded-xl border text-xs {{ $slideshowDuration === 15000 ? 'accent-bg text-white font-bold' : 'border-[var(--border-subtle)]' }}">15s</button>
-                            </div>
-                        </div>
-
-                        <div class="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] flex items-center justify-between cursor-pointer"
-                             @click="$wire.videoAutoplay = !$wire.videoAutoplay; $dispatch('notify', 'Video autoplay saved')">
-                            <div>
-                                <div class="font-bold text-sm">Autoplay Muted Videos on Scroll</div>
-                                <div class="text-xs text-[var(--text-dim)] mt-0.5">Automatically play MP4 animated media when visible.</div>
-                            </div>
-                            <input type="checkbox" wire:model.live="videoAutoplay" class="w-5 h-5 rounded accent-bg">
-                        </div>
-
-                        <div class="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] flex items-center justify-between cursor-pointer"
-                             @click="$wire.infiniteScroll = !$wire.infiniteScroll; $dispatch('notify', 'Infinite scroll preference saved')">
-                            <div>
-                                <div class="font-bold text-sm">Infinite Scroll Feed</div>
-                                <div class="text-xs text-[var(--text-dim)] mt-0.5">Automatically load more artworks as you scroll down the feed.</div>
-                            </div>
-                            <input type="checkbox" wire:model.live="infiniteScroll" class="w-5 h-5 rounded accent-bg">
-                        </div>
-                    </div>
-                </div>
-            @endif
-
-            <!-- 7. Artist & Commission Preferences Category -->
-            @if($activeCategory === 'artist')
-                <div class="space-y-6">
-                    <div>
-                        <h2 class="text-xl font-bold">Artist & Commission Preferences</h2>
-                        <p class="text-xs text-[var(--text-dim)] mt-1">Configure pricing baseline, slot capacity, and accepted payment methods.</p>
-                    </div>
-
-                    <div class="space-y-4">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div class="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-2">
-                                <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Minimum Commission Price ($ USD)</label>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-sm font-bold">$</span>
-                                    <input type="text" wire:model="minPrice" class="w-full p-2.5 rounded-xl bg-[var(--bg-page)] border border-[var(--border-subtle)] text-sm font-bold outline-none">
-                                </div>
-                            </div>
-
-                            <div class="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-2">
-                                <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Open Slots Counter</label>
-                                <input type="text" wire:model="openSlotsCount" placeholder="e.g. 3/5 slots open" class="w-full p-2.5 rounded-xl bg-[var(--bg-page)] border border-[var(--border-subtle)] text-sm font-bold outline-none">
-                            </div>
-                        </div>
-
-                        <div class="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3">
-                            <label class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wider">Accepted Payment Badges</label>
-                            <div class="flex flex-wrap gap-2">
-                                @php
-                                    $allPayments = ['PayPal', 'Stripe', 'Ko-fi', 'Patreon', 'Crypto'];
-                                @endphp
-                                @foreach($allPayments as $method)
-                                    @php $selected = in_array($method, $paymentMethods); @endphp
-                                    <button wire:click="
-                                        if (in_array('{{ $method }}', $paymentMethods)) {
-                                            $paymentMethods = array_diff($paymentMethods, ['{{ $method }}']);
-                                        } else {
-                                            $paymentMethods[] = '{{ $method }}';
-                                        }
-                                        $dispatch('notify', 'Payment methods updated');
-                                    " class="px-3.5 py-2 rounded-xl text-xs font-bold border transition {{ $selected ? 'accent-bg text-white border-transparent' : 'border-[var(--border-subtle)] text-[var(--text-dim)]' }}">
-                                        {{ $selected ? '✓ ' : '+ ' }}{{ $method }}
-                                    </button>
-                                @endforeach
-                            </div>
-                        </div>
-
-                        <div class="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] flex items-center justify-between cursor-pointer"
-                             @click="$wire.watermarkProtection = !$wire.watermarkProtection; $dispatch('notify', 'Watermark protection preference updated')">
-                            <div>
-                                <div class="font-bold text-sm">Download & Original Resolution Protection</div>
-                                <div class="text-xs text-[var(--text-dim)] mt-0.5">Protect high-resolution original artwork files from unauthorized right-click downloads.</div>
-                            </div>
-                            <input type="checkbox" wire:model.live="watermarkProtection" class="w-5 h-5 rounded accent-bg">
-                        </div>
-
-                        <div>
-                            <button wire:click="$dispatch('notify', 'Artist preferences saved successfully!')" 
-                                    class="px-6 py-2.5 rounded-2xl accent-bg text-white font-bold text-sm shadow hover:opacity-90 transition">
-                                Save Artist Settings
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            @endif
         </div>
+
+        <!-- ========================================================================= -->
+        <!-- 3. RIGHT PANEL: LIVE CONTEXT & APPEARANCE PREVIEW (Visible on xl+ 1280px+) -->
+        <!-- ========================================================================= -->
+        <div class="hidden xl:block xl:col-span-3 p-4 bg-[var(--bg-surface)] border-l border-[var(--border-subtle)] space-y-4">
+            <h3 class="text-xs font-black uppercase tracking-wider text-[var(--text-dim)]">Live Preview & Info</h3>
+
+            <!-- Live Card Preview -->
+            <div class="p-4 rounded-2xl bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] space-y-3 shadow-md">
+                <div class="flex items-center gap-2">
+                    <div class="w-6 h-6 rounded-full accent-bg text-white text-[10px] font-bold flex items-center justify-center">B</div>
+                    <div class="text-xs font-bold text-[var(--text-main)]">Artwork Card Preview</div>
+                </div>
+                
+                <div class="relative aspect-video rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] overflow-hidden flex items-center justify-center text-xs text-[var(--text-dim)]">
+                    <span class="{{ $blurNsfw ? 'blur-sm' : '' }}">Artwork Image</span>
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <span class="text-[11px] font-semibold text-[var(--text-muted)]">Theme Mode</span>
+                    <span class="text-[11px] font-bold accent-text capitalize">{{ $themeMode }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-[11px] font-semibold text-[var(--text-muted)]">Accent Color</span>
+                    <span class="text-[11px] font-bold accent-text capitalize">{{ $themePalette }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-[11px] font-semibold text-[var(--text-muted)]">Font Scale</span>
+                    <span class="text-[11px] font-bold accent-text uppercase">{{ $fontSize }}</span>
+                </div>
+            </div>
+
+            <!-- Contextual Help Box -->
+            <div class="p-4 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-xs text-[var(--text-main)] space-y-2">
+                <div class="font-bold text-sky-400 flex items-center gap-1.5">
+                    <span>💡 Contextual Help</span>
+                </div>
+                <p class="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                    Changes made to immediate settings (themes, ratings, filters) auto-save instantly across your device.
+                </p>
+            </div>
+        </div>
+
     </div>
 </div>

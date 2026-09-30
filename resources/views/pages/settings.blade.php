@@ -1,3 +1,3 @@
-<x-layouts.app title="Settings & Appearance">
-    <livewire:settings-view />
+<x-layouts.app title="Settings & Preferences">
+    <livewire:settings-view :category="$category ?? 'account'" />
 </x-layouts.app>

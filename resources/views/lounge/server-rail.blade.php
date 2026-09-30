@@ -3,8 +3,9 @@
 --}}
 <nav class="flex w-[72px] shrink-0 flex-col items-center gap-2 overflow-y-auto overflow-x-hidden border-r border-black/20 bg-[var(--bg-page)] py-3" aria-label="Servers">
     {{-- Direct messages / home --}}
-    <a href="{{ route('messages') }}" class="group relative flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--bg-surface)] text-[var(--text-muted)] transition-all hover:rounded-xl hover:bg-[var(--accent-primary)] hover:text-white" aria-label="Direct messages">
-        <span class="absolute -left-3 h-2 w-1 rounded-r-full bg-white transition-all group-hover:h-6"></span>
+    @php($isDmActive = request()->routeIs('lounge.dms*'))
+    <a href="{{ route('lounge.dms') }}" class="group relative flex h-12 w-12 items-center justify-center rounded-2xl {{ $isDmActive ? 'accent-bg text-white shadow-md' : 'bg-[var(--bg-surface)] text-[var(--text-muted)] hover:rounded-xl hover:bg-[var(--accent-primary)] hover:text-white' }} transition-all" aria-label="Direct messages">
+        <span class="absolute -left-3 h-2 w-1 rounded-r-full bg-white transition-all {{ $isDmActive ? 'h-8' : 'group-hover:h-6' }}"></span>
         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
         <span class="pointer-events-none absolute left-16 z-50 hidden whitespace-nowrap rounded-lg bg-black px-2.5 py-1.5 text-xs font-semibold text-white shadow-xl group-hover:block">Direct Messages</span>
     </a>
@@ -13,7 +14,7 @@
         <div class="flex flex-col items-center gap-2">
             @foreach($recentConversations as $conversation)
                 @php($partner = $conversation->getOtherUser(Auth::user()))
-                <a href="{{ route('messages', $conversation->id) }}" class="group relative" aria-label="Chat with {{ $partner->name }}">
+                <a href="{{ route('lounge.dms', $conversation->id) }}" class="group relative" aria-label="Chat with {{ $partner->name }}">
                     <img src="{{ $partner->avatar_url }}" alt="" class="h-10 w-10 rounded-full object-cover ring-2 ring-transparent transition group-hover:ring-[var(--accent-primary)]">
                     <span class="pointer-events-none absolute left-14 top-1/2 z-50 hidden -translate-y-1/2 whitespace-nowrap rounded-lg bg-black px-2.5 py-1.5 text-xs font-semibold text-white shadow-xl group-hover:block">{{ $partner->name }}</span>
                 </a>

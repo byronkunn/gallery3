@@ -2,6 +2,9 @@
 
 namespace Database\Seeders;
 
+use App\Models\Artist;
+use App\Models\ArtistAlias;
+use App\Models\ArtistLink;
 use App\Models\Collection;
 use App\Models\CollectionItem;
 use App\Models\Comment;
@@ -17,6 +20,9 @@ use App\Models\PoolProgress;
 use App\Models\Post;
 use App\Models\PostMedia;
 use App\Models\Tag;
+use App\Models\TagAlias;
+use App\Models\TagHistory;
+use App\Models\TagImplication;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +38,7 @@ class DatabaseSeeder extends Seeder
             'name' => 'Kira Yukishiro',
             'username' => 'kira_art',
             'email' => 'kira@booru.art',
+            'approved_at' => now(),
             'password' => Hash::make('password'),
             'avatar_url' => '/sfw/avatar/0738955ca929985f39921b4876053170.png',
             'banner_url' => '/sfw/banner-image/sample_0a026d6456f6806f67a9d67f856e8862.jpg',
@@ -52,6 +59,7 @@ class DatabaseSeeder extends Seeder
             'name' => 'Ren Amamiya',
             'username' => 'phantom_ren',
             'email' => 'ren@booru.art',
+            'approved_at' => now(),
             'password' => Hash::make('password'),
             'avatar_url' => '/sfw/avatar/sample_07acb23be6e4bea15d091117693849b2.jpg',
             'banner_url' => '/sfw/banner-image/sample_1186719173244242bce471e4476a266e.jpg',
@@ -67,6 +75,7 @@ class DatabaseSeeder extends Seeder
             'name' => 'Aoi Sorano',
             'username' => 'aoi_clouds',
             'email' => 'aoi@booru.art',
+            'approved_at' => now(),
             'password' => Hash::make('password'),
             'avatar_url' => '/sfw/avatar/sample_1cc3b7361bda35f6bf0f78d8cb47640f.jpg',
             'banner_url' => '/sfw/banner-image/sample_1ebf418432111a9530b3287dc96b9410.jpg',
@@ -82,6 +91,7 @@ class DatabaseSeeder extends Seeder
             'name' => 'Maya Lin',
             'username' => 'mayadraws',
             'email' => 'maya@booru.art',
+            'approved_at' => now(),
             'password' => Hash::make('password'),
             'avatar_url' => '/sfw/avatar/sample_412993eb4b402e04f3f15b03b23bf071.jpg',
             'banner_url' => '/sfw/banner-image/sample_25eb2815b78288a5b6b97431e6086882.jpg',
@@ -99,48 +109,49 @@ class DatabaseSeeder extends Seeder
         $aoi->following()->attach([$me->id]);
         $maya->following()->attach([$me->id, $ren->id]);
 
-        // 2. Tags with Booru Categories
+        // 2. Tags with Booru Categories & Rich Wiki Documentation
         $tagsData = [
             // Artists
-            ['name' => 'kira_art', 'type' => 'artist'],
-            ['name' => 'phantom_ren', 'type' => 'artist'],
-            ['name' => 'aoi_clouds', 'type' => 'artist'],
-            ['name' => 'mayadraws', 'type' => 'artist'],
+            ['name' => 'kira_art', 'type' => 'artist', 'short_description' => 'Official tag for artwork created by Kira Yukishiro.', 'wiki_summary' => 'This tag identifies original character and concept artwork drawn by digital illustrator Kira Yukishiro.'],
+            ['name' => 'phantom_ren', 'type' => 'artist', 'short_description' => 'Official tag for author Ren Amamiya.'],
+            ['name' => 'aoi_clouds', 'type' => 'artist', 'short_description' => 'Official tag for cyberpunk artist Aoi Sorano.'],
+            ['name' => 'mayadraws', 'type' => 'artist', 'short_description' => 'Official tag for illustrator Maya Lin.'],
 
             // Characters
-            ['name' => 'frieren', 'type' => 'character'],
-            ['name' => 'fern', 'type' => 'character'],
-            ['name' => 'makima', 'type' => 'character'],
-            ['name' => 'asuka_langley', 'type' => 'character'],
-            ['name' => 'cyber_samurai', 'type' => 'character'],
-            ['name' => 'astral_valkyrie', 'type' => 'character'],
+            ['name' => 'frieren', 'type' => 'character', 'short_description' => 'Elven mage protagonist from Frieren: Beyond Journey\'s End.'],
+            ['name' => 'fern', 'type' => 'character', 'short_description' => 'Human mage apprentice to Frieren.'],
+            ['name' => 'makima', 'type' => 'character', 'short_description' => 'Public Safety Devil Hunter from Chainsaw Man.'],
+            ['name' => 'asuka_langley', 'type' => 'character', 'short_description' => 'Second Child EVA Pilot from Evangelion.'],
+            ['name' => 'cyber_samurai', 'type' => 'character', 'short_description' => 'Original cyberpunk character.'],
+            ['name' => 'astral_valkyrie', 'type' => 'character', 'short_description' => 'Original celestial warrior character.'],
 
             // Series / Copyright
-            ['name' => 'frieren_beyond_journeys_end', 'type' => 'series'],
-            ['name' => 'chainsaw_man', 'type' => 'series'],
-            ['name' => 'neon_genesis_evangelion', 'type' => 'series'],
-            ['name' => 'original', 'type' => 'series'],
-            ['name' => 'cyberpunk_2077', 'type' => 'series'],
+            ['name' => 'frieren_beyond_journeys_end', 'type' => 'series', 'short_description' => 'Fantasy manga & anime series by Kanehito Yamada.'],
+            ['name' => 'chainsaw_man', 'type' => 'series', 'short_description' => 'Action dark fantasy manga series by Tatsuki Fujimoto.'],
+            ['name' => 'neon_genesis_evangelion', 'type' => 'series', 'short_description' => 'Mecha anime franchise created by Hideaki Anno.'],
+            ['name' => 'original', 'type' => 'series', 'short_description' => 'Original artworks not based on existing commercial intellectual property.'],
+            ['name' => 'cyberpunk_2077', 'type' => 'series', 'short_description' => 'Sci-fi RPG universe by CD Projekt Red & Mike Pondsmith.'],
 
             // General
-            ['name' => 'scenery', 'type' => 'general'],
-            ['name' => 'night_sky', 'type' => 'general'],
-            ['name' => 'glowing_eyes', 'type' => 'general'],
-            ['name' => 'rain', 'type' => 'general'],
-            ['name' => 'cyberpunk_city', 'type' => 'general'],
-            ['name' => 'cherry_blossoms', 'type' => 'general'],
-            ['name' => 'sword', 'type' => 'general'],
-            ['name' => 'portrait', 'type' => 'general'],
-            ['name' => 'wide_angle', 'type' => 'general'],
-            ['name' => 'lighting', 'type' => 'general'],
-            ['name' => 'clouds', 'type' => 'general'],
-            ['name' => 'floating_petals', 'type' => 'general'],
+            ['name' => 'landscape', 'type' => 'general', 'short_description' => 'Natural or artificial scenery where the environment is the primary subject.', 'wiki_summary' => 'A landscape image primarily depicts natural or artificial scenery rather than focusing on an individual character.', 'wiki_usage' => "Use this tag when scenery or environment is a major focus of the work.\n• Mountains & sky\n• Forest vistas\n• City skylines", 'wiki_do_not_use' => 'Do not use merely because some background is visible behind a character close-up portrait.'],
+            ['name' => 'scenery', 'type' => 'general', 'short_description' => 'General scenery and environmental backgrounds.', 'wiki_summary' => 'Broad environmental tag covering landscapes, architecture, interiors, and nature backgrounds.'],
+            ['name' => 'night_sky', 'type' => 'general', 'short_description' => 'Images featuring starry skies, midnight horizons, or celestial bodies.'],
+            ['name' => 'glowing_eyes', 'type' => 'general', 'short_description' => 'Characters with luminous or magic-infused glowing irises.'],
+            ['name' => 'rain', 'type' => 'general', 'short_description' => 'Precipitation, rain droplets, or wet environmental reflections.'],
+            ['name' => 'cyberpunk_city', 'type' => 'general', 'short_description' => 'Futuristic urban cityscape with neon lighting and high technology.'],
+            ['name' => 'cherry_blossoms', 'type' => 'general', 'short_description' => 'Sakura trees or falling pink cherry blossom petals.'],
+            ['name' => 'sword', 'type' => 'general', 'short_description' => 'Bladed weapons including katana, broadswords, and energy sabers.'],
+            ['name' => 'portrait', 'type' => 'general', 'short_description' => 'Close-up or bust shot focusing primarily on a character face.'],
+            ['name' => 'wide_angle', 'type' => 'general', 'short_description' => 'Panoramic or wide field of view framing.'],
+            ['name' => 'lighting', 'type' => 'general', 'short_description' => 'Dramatic light sources, volumetric rays, or lens flare.'],
+            ['name' => 'clouds', 'type' => 'general', 'short_description' => 'Cumulus, atmospheric clouds, or stormy cloudscapes.'],
+            ['name' => 'floating_petals', 'type' => 'general', 'short_description' => 'Petals drifting in wind currents.'],
 
             // Meta
-            ['name' => 'highres', 'type' => 'meta'],
-            ['name' => 'multiple_views', 'type' => 'meta'],
-            ['name' => 'concept_art', 'type' => 'meta'],
-            ['name' => 'comic', 'type' => 'meta'],
+            ['name' => 'highres', 'type' => 'meta', 'short_description' => 'High resolution images (>= 2000px on longest edge).'],
+            ['name' => 'multiple_views', 'type' => 'meta', 'short_description' => 'Sheets showing character turnarounds or multiple angles.'],
+            ['name' => 'concept_art', 'type' => 'meta', 'short_description' => 'Pre-production design sketches and worldbuilding studies.'],
+            ['name' => 'comic', 'type' => 'meta', 'short_description' => 'Multi-panel sequential storytelling art.'],
         ];
 
         $tags = [];
@@ -149,9 +160,38 @@ class DatabaseSeeder extends Seeder
                 'name' => $t['name'],
                 'slug' => Str::slug($t['name']),
                 'type' => $t['type'],
+                'short_description' => $t['short_description'] ?? null,
+                'wiki_summary' => $t['wiki_summary'] ?? null,
+                'wiki_usage' => $t['wiki_usage'] ?? null,
+                'wiki_do_not_use' => $t['wiki_do_not_use'] ?? null,
                 'posts_count' => 0,
             ]);
             $tags[$t['name']] = $tag;
+        }
+
+        // Aliases
+        if (isset($tags['landscape'])) {
+            TagAlias::create(['alias' => 'landscapes', 'tag_id' => $tags['landscape']->id]);
+            TagAlias::create(['alias' => 'scenic_landscape', 'tag_id' => $tags['landscape']->id]);
+        }
+
+        // Implications (landscape -> scenery)
+        if (isset($tags['landscape']) && isset($tags['scenery'])) {
+            TagImplication::create([
+                'tag_id' => $tags['landscape']->id,
+                'implied_tag_id' => $tags['scenery']->id,
+            ]);
+        }
+
+        // Histories
+        if (isset($tags['landscape'])) {
+            TagHistory::create([
+                'tag_id' => $tags['landscape']->id,
+                'user_id' => $me->id,
+                'action' => 'created',
+                'new_wiki' => ['name' => 'landscape', 'type' => 'general'],
+                'edit_summary' => 'Initial tag creation and wiki setup',
+            ]);
         }
 
         // Followed tags for $me
@@ -845,5 +885,64 @@ class DatabaseSeeder extends Seeder
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        // ------------------------------------------------------------- artists
+        $artistsData = [
+            ['name' => 'John Staub', 'platform' => 'x', 'handle' => 'johnstaub', 'claimed_by' => $me],
+            ['name' => 'Ross Tran', 'platform' => 'instagram', 'handle' => 'rossdraws', 'claimed_by' => $maya],
+            ['name' => 'Ilya Kuvshinov', 'platform' => 'pixiv', 'handle' => 'kuvshinov_ilya', 'claimed_by' => null],
+            ['name' => 'WLOP', 'platform' => 'patreon', 'handle' => 'wlop', 'claimed_by' => null],
+            ['name' => 'Guweiz', 'platform' => 'instagram', 'handle' => 'guweiz', 'claimed_by' => $aoi],
+            ['name' => 'Loish', 'platform' => 'website', 'handle' => 'loish', 'claimed_by' => null],
+        ];
+
+        $createdArtists = [];
+        foreach ($artistsData as $aIndex => $aData) {
+            $artist = Artist::create([
+                'name' => $aData['name'],
+                'slug' => Str::slug($aData['name']),
+                'avatar_url' => $aIndex % 2 === 0
+                    ? '/sfw/image/sample_e2b524fcf4cd0c803d0d940ff342a84c.jpg'
+                    : '/sfw/image/sample_3a88abbc0412737c013a94573ad4b70b.jpg',
+                'banner_url' => '/sfw/image/sample_e2b524fcf4cd0c803d0d940ff342a84c.jpg',
+                'bio' => $aData['name'].' is a concept artist and illustrator featured in the Booru.art catalog.',
+                'is_claimed' => $aData['claimed_by'] !== null,
+                'claimed_by_user_id' => $aData['claimed_by']?->id,
+                'works_count' => 0,
+                'followers_count' => 0,
+            ]);
+
+            ArtistAlias::create([
+                'artist_id' => $artist->id,
+                'alias' => '@'.$aData['handle'],
+                'slug' => Str::slug($aData['handle']),
+            ]);
+
+            ArtistLink::create([
+                'artist_id' => $artist->id,
+                'platform' => $aData['platform'],
+                'url' => 'https://example.com/'.$aData['handle'],
+                'title' => ucfirst($aData['platform']),
+                'status' => 'verified',
+                'verified_at' => now(),
+            ]);
+
+            $createdArtists[] = $artist;
+        }
+
+        // Attribute the seeded artworks to those artists and backfill work counts.
+        foreach ($createdPosts as $pIndex => $post) {
+            $artist = $createdArtists[$pIndex % count($createdArtists)];
+            $post->update([
+                'artist_id' => $artist->id,
+                'artist_name' => $artist->name,
+                'artist_url' => null,
+                'is_artist_upload' => $pIndex % 3 === 0,
+            ]);
+            $artist->increment('works_count');
+        }
+
+        $me->followingArtists()->syncWithoutDetaching($createdArtists[0]->id);
+        $maya->followingArtists()->syncWithoutDetaching([$createdArtists[0]->id, $createdArtists[4]->id]);
     }
 }

@@ -91,7 +91,7 @@
 
                 <div class="mt-3 flex flex-wrap gap-2">
                     <a href="{{ route('profile', $profileMember->user?->username) }}" class="rounded-xl accent-bg px-3 py-1.5 text-xs font-bold text-white">View profile</a>
-                    <a href="{{ route('messages') }}" class="rounded-xl border border-[var(--border-subtle)] px-3 py-1.5 text-xs font-bold text-[var(--text-main)]">Message</a>
+                    <a href="{{ route('lounge.dms') }}" class="rounded-xl border border-[var(--border-subtle)] px-3 py-1.5 text-xs font-bold text-[var(--text-main)]">Message</a>
 
                     @if($permissions['manage_members'] && $profileMember->user_id !== $community->owner_id)
                         <button wire:click="$set('timeoutUserId', {{ $profileMember->user_id }})" class="rounded-xl bg-amber-500/15 px-3 py-1.5 text-xs font-bold text-amber-400">Timeout</button>
@@ -168,6 +168,24 @@
             <div class="flex justify-end gap-2">
                 <button type="button" wire:click="$set('reportTargetId', null)" class="rounded-xl px-4 py-2 text-sm text-[var(--text-muted)]">Cancel</button>
                 <button class="rounded-xl bg-amber-600 px-5 py-2 text-sm font-bold text-white">Send report</button>
+            </div>
+        </form>
+    </div>
+@endif
+
+{{-- =============================== escalate the whole server to site admins --}}
+@if($isMember && $community->owner_id !== auth()->id())
+    <div x-data x-show="$wire.siteReportOpen" x-cloak class="fixed inset-0 z-[75] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" @click.self="$wire.set('siteReportOpen', false)">
+        <form wire:submit="reportCommunityToSite" class="w-full max-w-md space-y-3 rounded-2xl border border-rose-500/30 bg-[var(--bg-surface)] p-5 shadow-2xl">
+            <h2 class="text-[15px] font-bold text-[var(--text-main)]">Report this server to site admins</h2>
+            <p class="text-xs text-[var(--text-muted)]">Use this when the server's own moderators cannot resolve the problem. Site admins receive the report in the moderation queue.</p>
+            <input wire:model="reportReason" maxlength="80" placeholder="Reason (required)" class="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-page)] px-3 py-2 text-sm text-[var(--text-main)] outline-none">
+            @error('reportReason') <p class="text-xs text-rose-400">{{ $message }}</p> @enderror
+            <textarea wire:model="reportDetails" maxlength="1000" rows="3" placeholder="What happened? (optional)" class="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-page)] p-3 text-sm text-[var(--text-main)] outline-none"></textarea>
+            @error('reportDetails') <p class="text-xs text-rose-400">{{ $message }}</p> @enderror
+            <div class="flex justify-end gap-2">
+                <button type="button" wire:click="$set('siteReportOpen', false)" class="rounded-xl px-4 py-2 text-sm text-[var(--text-muted)]">Cancel</button>
+                <button class="rounded-xl bg-rose-600 px-5 py-2 text-sm font-bold text-white">Send to site admins</button>
             </div>
         </form>
     </div>
