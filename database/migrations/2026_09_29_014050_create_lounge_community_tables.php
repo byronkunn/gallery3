@@ -99,7 +99,7 @@ return new class extends Migration
             $table->string('image_url')->nullable();
             $table->string('status', 20)->default('open');
             $table->timestamps();
-            $table->index(['community_channel_id', 'status', 'updated_at']);
+            $table->index(['community_channel_id', 'status', 'updated_at'], 'forum_posts_channel_status_updated_idx');
         });
 
         Schema::create('community_forum_replies', function (Blueprint $table): void {
@@ -109,7 +109,7 @@ return new class extends Migration
             $table->text('body');
             $table->boolean('is_hidden')->default(false);
             $table->timestamps();
-            $table->index(['community_forum_post_id', 'created_at']);
+            $table->index(['community_forum_post_id', 'created_at'], 'forum_replies_post_created_idx');
         });
 
         Schema::create('community_forum_tags', function (Blueprint $table): void {
