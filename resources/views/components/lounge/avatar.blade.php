@@ -30,7 +30,7 @@
         <img src="{{ $user->avatar_url }}" alt="" class="h-full w-full rounded-full object-cover">
     @else
         <span class="flex h-full w-full items-center justify-center rounded-full bg-[var(--bg-page)] text-xs font-black uppercase text-[var(--text-dim)]" role="img" aria-label="No avatar image">
-            {{ mb_strtoupper(mb_substr($user?->name ?: $user?->username ?: '?', 0, 1)) }}
+            {{ mb_strtoupper(mb_substr(data_get($user, 'name') ?: data_get($user, 'username') ?: '?', 0, 1)) }}
         </span>
     @endif
     @if($dot)
