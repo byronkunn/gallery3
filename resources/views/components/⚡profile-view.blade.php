@@ -352,9 +352,20 @@ new class extends Component
 <div class="max-w-5xl mx-auto pb-12 w-full min-w-0">
     <!-- Header Banner Image (Twitter style) -->
     <div class="relative w-full h-48 sm:h-64 md:h-80 bg-neutral-900 overflow-hidden">
-        <img src="{{ $profileUser->banner_url ?? 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1600&q=80' }}"
-             alt="Profile Banner"
-             class="w-full h-full object-cover">
+        @if($profileUser->banner_url)
+            <img src="{{ $profileUser->banner_url }}"
+                 alt="Profile Banner"
+                 class="w-full h-full object-cover">
+        @else
+            <div class="flex h-full items-center justify-center bg-gradient-to-br from-[var(--bg-surface)] via-[var(--bg-page)] to-[var(--bg-surface)] text-[var(--text-dim)]" role="img" aria-label="No banner image">
+                <div class="flex flex-col items-center gap-2 text-center">
+                    <svg class="h-10 w-10 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 3.75-3.75 3 3 4.5-5.25 8.25 8.25M3.75 19.5h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Z" />
+                    </svg>
+                    <span class="text-xs font-semibold uppercase tracking-[0.2em]">No banner image</span>
+                </div>
+            </div>
+        @endif
         <div class="absolute inset-0 bg-gradient-to-t from-[var(--bg-page)]/80 via-transparent to-black/20"></div>
     </div>
 
@@ -363,9 +374,15 @@ new class extends Component
         <!-- Avatar & Actions Row -->
         <div class="flex items-end justify-between">
             <div class="relative">
-                <img src="{{ $profileUser->avatar_url }}" 
-                     alt="{{ $profileUser->name }}"
-                     class="w-32 h-32 sm:w-40 sm:h-40 rounded-full object-cover ring-4 ring-[var(--bg-page)] shadow-2xl bg-neutral-900">
+                @if($profileUser->avatar_url)
+                    <img src="{{ $profileUser->avatar_url }}"
+                         alt="{{ $profileUser->name }}"
+                         class="w-32 h-32 sm:w-40 sm:h-40 rounded-full object-cover ring-4 ring-[var(--bg-page)] shadow-2xl bg-neutral-900">
+                @else
+                    <div class="flex w-32 h-32 sm:w-40 sm:h-40 items-center justify-center rounded-full bg-gradient-to-br from-[var(--bg-surface-elevated)] to-[var(--bg-page)] text-4xl sm:text-5xl font-black uppercase text-[var(--text-dim)] ring-4 ring-[var(--bg-page)] shadow-2xl" role="img" aria-label="No avatar image">
+                        {{ mb_strtoupper(mb_substr($profileUser->name ?: $profileUser->username, 0, 1)) }}
+                    </div>
+                @endif
                 @if($profileUser->is_artist)
                     <div class="absolute bottom-2 right-2 p-1.5 rounded-full accent-bg text-white ring-2 ring-[var(--bg-page)] shadow" title="Verified Artist">
                         <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
