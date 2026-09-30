@@ -80,6 +80,12 @@ class SiteRoutesAndComponentsTest extends TestCase
         $user1 = User::where('username', 'kira_art')->first();
         $user2 = User::where('username', 'phantom_ren')->first();
 
+        Livewire::actingAs($user1)
+            ->test('⚡profile-view', ['username' => 'kira_art'])
+            ->assertSee(route('settings', ['category' => 'profile']))
+            ->assertSee('Change your profile banner')
+            ->assertSee('Change your profile avatar');
+
         // Open follow modal
         Livewire::test('⚡profile-view', ['username' => 'kira_art'])
             ->call('openFollowModal', 'followers')

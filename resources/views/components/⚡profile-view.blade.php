@@ -336,6 +336,9 @@ new class extends Component
 <div class="max-w-5xl mx-auto pb-12 w-full min-w-0">
     <!-- Header Banner Image (Twitter style) -->
     <div class="relative w-full h-48 sm:h-64 md:h-80 bg-neutral-900 overflow-hidden">
+        @if($isMe)
+            <a href="{{ route('settings', ['category' => 'profile']) }}" class="block h-full cursor-pointer" aria-label="Change your profile banner">
+        @endif
         @if($profileUser->banner_url)
             <img src="{{ $profileUser->banner_url }}"
                  alt="Profile Banner"
@@ -350,7 +353,10 @@ new class extends Component
                 </div>
             </div>
         @endif
-        <div class="absolute inset-0 bg-gradient-to-t from-[var(--bg-page)]/80 via-transparent to-black/20"></div>
+        @if($isMe)
+            </a>
+        @endif
+        <div class="absolute inset-0 bg-gradient-to-t from-[var(--bg-page)]/80 via-transparent to-black/20 pointer-events-none"></div>
     </div>
 
     <!-- Profile Header Info Container -->
@@ -358,6 +364,9 @@ new class extends Component
         <!-- Avatar & Actions Row -->
         <div class="flex items-end justify-between">
             <div class="relative">
+                @if($isMe)
+                    <a href="{{ route('settings', ['category' => 'profile']) }}" class="block cursor-pointer rounded-full" aria-label="Change your profile avatar">
+                @endif
                 @if($profileUser->avatar_url)
                     <img src="{{ $profileUser->avatar_url }}"
                          alt="{{ $profileUser->name }}"
@@ -366,6 +375,9 @@ new class extends Component
                     <div class="flex w-32 h-32 sm:w-40 sm:h-40 items-center justify-center rounded-full bg-gradient-to-br from-[var(--bg-surface-elevated)] to-[var(--bg-page)] text-4xl sm:text-5xl font-black uppercase text-[var(--text-dim)] ring-4 ring-[var(--bg-page)] shadow-2xl" role="img" aria-label="No avatar image">
                         {{ mb_strtoupper(mb_substr($profileUser->name ?: $profileUser->username, 0, 1)) }}
                     </div>
+                @endif
+                @if($isMe)
+                    </a>
                 @endif
                 @if($profileUser->is_artist)
                     <div class="absolute bottom-2 right-2 p-1.5 rounded-full accent-bg text-white ring-2 ring-[var(--bg-page)] shadow" title="Verified Artist">
