@@ -563,7 +563,7 @@ new class extends Component
     <!-- Top Search & Sort Header -->
     <div class="space-y-4 w-full min-w-0">
         <!-- Search & Control Bar (Spec: Sits above all tabs and applies within the current tab) -->
-        <div class="flex flex-col md:flex-row items-stretch md:items-center gap-3 w-full min-w-0">
+        <div class="flex flex-col xl:flex-row items-stretch xl:items-center gap-3 w-full min-w-0">
             <!-- Search Container with Multi-tag Chips & Autocomplete -->
             <div class="flex items-center gap-2 flex-1 min-w-0" x-data="{ suggestionsOpen: true }">
                 <div class="relative flex-1 min-w-0">

@@ -333,7 +333,7 @@ new class extends Component
                     <div class="space-y-4">
                         <div>
                             <label class="block rounded-2xl border border-dashed border-[var(--border-medium)] p-4 text-sm font-semibold">
-                                <span>Choose video file (MP4, WebM, MOV; up to 12 MB)</span>
+                                <span>Choose video file (MP4, WebM, MOV; up to 500 MB)</span>
                                 <input type="file" wire:model="videoUpload" accept="video/mp4,video/webm,video/quicktime" class="mt-2 block w-full text-xs">
                             </label>
                             @error('videoUpload') <p class="text-xs text-rose-400">{{ $message }}</p> @enderror
