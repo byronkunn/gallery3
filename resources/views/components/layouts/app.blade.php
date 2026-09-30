@@ -151,128 +151,26 @@
                 })->where('sender_id', '!=', auth()->id())->where('is_read', false)->count() : 0;
             @endphp
 
-            <nav class="flex-1 py-6 px-3 space-y-2 overflow-y-auto">
-                <!-- Gallery (Home, Explore, Search all unified) -->
-                <a href="{{ route('gallery') }}"
-                   class="flex items-center gap-4 px-3.5 py-3.5 rounded-2xl font-semibold transition-all duration-200 group {{ request()->routeIs('gallery') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-elevated)]' }}"
-                   :title="navCollapsed ? 'Gallery' : ''">
-                    <svg class="w-6 h-6 shrink-0 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
-                    </svg>
-                    <span x-show="!navCollapsed" class="hidden md:inline truncate text-base">Gallery</span>
+            <nav class="flex-1 py-6 px-3 space-y-2 overflow-y-auto" aria-label="Main navigation">
+                <a href="{{ route('gallery') }}" class="flex items-center gap-4 rounded-2xl px-3.5 py-3.5 font-semibold transition-all duration-200 group {{ request()->routeIs('gallery') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:bg-[var(--bg-surface-elevated)] hover:text-[var(--text-main)]' }}" :title="navCollapsed ? 'Gallery' : ''">
+                    <svg class="h-6 w-6 shrink-0 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                    <span x-show="!navCollapsed" class="hidden truncate text-base md:inline">Gallery</span>
+                </a>
+                <a href="{{ route('pools.index') }}" class="flex items-center gap-4 rounded-2xl px-3.5 py-3.5 font-semibold transition-all duration-200 group {{ request()->routeIs('pools.*') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:bg-[var(--bg-surface-elevated)] hover:text-[var(--text-main)]' }}" :title="navCollapsed ? 'Pools' : ''">
+                    <svg class="h-6 w-6 shrink-0 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                    <span x-show="!navCollapsed" class="hidden truncate text-base md:inline">Pools</span>
+                </a>
+                <a href="{{ route('upload') }}" class="flex items-center gap-4 rounded-2xl px-3.5 py-3.5 font-semibold transition-all duration-200 group {{ request()->routeIs('upload') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:bg-[var(--bg-surface-elevated)] hover:text-[var(--text-main)]' }}" :title="navCollapsed ? 'Upload' : ''">
+                    <svg class="h-6 w-6 shrink-0 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                    <span x-show="!navCollapsed" class="hidden truncate text-base md:inline">Upload</span>
+                </a>
+                <a href="{{ route('lounge.explore') }}" class="relative flex items-center gap-4 rounded-2xl px-3.5 py-3.5 font-semibold transition-all duration-200 group {{ request()->routeIs('lounge.*') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:bg-[var(--bg-surface-elevated)] hover:text-[var(--text-main)]' }}" :title="navCollapsed ? 'Lounge' : ''">
+                    <span class="relative shrink-0 text-xl leading-6">◉
+                        @if($unreadMessages > 0)<span class="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-sky-500 px-1 text-[9px] font-bold text-white">{{ $unreadMessages }}</span>@endif
+                    </span>
+                    <span x-show="!navCollapsed" class="hidden truncate text-base md:inline">Lounge</span>
                 </a>
 
-                <!-- Pools (Series & Manga) -->
-                <a href="{{ route('pools.index') }}"
-                   class="flex items-center gap-4 px-3.5 py-3.5 rounded-2xl font-semibold transition-all duration-200 group {{ request()->routeIs('pools.*') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-elevated)]' }}"
-                   :title="navCollapsed ? 'Pools & Manga' : ''">
-                    <svg class="w-6 h-6 shrink-0 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
-                    </svg>
-                    <span x-show="!navCollapsed" class="hidden md:inline truncate text-base">Pools</span>
-                </a>
-
-                <!-- Tags Hub & Wiki -->
-                <a href="{{ route('tags.index') }}"
-                   class="flex items-center gap-4 px-3.5 py-3.5 rounded-2xl font-semibold transition-all duration-200 group {{ request()->routeIs('tags.*') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-elevated)]' }}"
-                   :title="navCollapsed ? 'Tags Hub & Wiki' : ''">
-                    <svg class="w-6 h-6 shrink-0 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
-                    </svg>
-                    <span x-show="!navCollapsed" class="hidden md:inline truncate text-base">Tags</span>
-                </a>
-
-                <a href="{{ route('lounge.explore') }}"
-                   class="relative flex items-center gap-4 px-3.5 py-3.5 rounded-2xl font-semibold transition-all duration-200 group {{ request()->routeIs('lounge.*') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-elevated)]' }}"
-                   :title="navCollapsed ? 'Lounge' : ''">
-                    <div class="relative shrink-0 flex items-center justify-center w-6 h-6">
-                        <span class="text-lg">◉</span>
-                        @if($unreadMessages > 0)
-                            <span class="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-5 h-5 px-1 text-xs font-bold text-white bg-sky-500 rounded-full ring-2 ring-[var(--bg-surface)]">
-                                {{ $unreadMessages }}
-                            </span>
-                        @endif
-                    </div>
-                    <span x-show="!navCollapsed" class="hidden md:inline truncate text-base">Lounge</span>
-                    @if($unreadMessages > 0)
-                        <span x-show="!navCollapsed" class="hidden md:inline ml-auto px-2 py-0.5 text-xs font-bold rounded-full bg-sky-500/20 text-sky-400 border border-sky-500/30">
-                            {{ $unreadMessages }} DMs
-                        </span>
-                    @endif
-                </a>
-
-                <!-- Notifications -->
-                <a href="{{ route('notifications') }}"
-                   class="relative flex items-center gap-4 px-3.5 py-3.5 rounded-2xl font-semibold transition-all duration-200 group {{ request()->routeIs('notifications') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-elevated)]' }}"
-                   :title="navCollapsed ? 'Notifications' : ''">
-                    <div class="relative shrink-0">
-                        <svg class="w-6 h-6 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
-                        </svg>
-                        @if($unreadNotifications > 0)
-                            <span class="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-5 h-5 px-1 text-xs font-bold text-white bg-rose-500 rounded-full ring-2 ring-[var(--bg-surface)] animate-pulse">
-                                {{ $unreadNotifications }}
-                            </span>
-                        @endif
-                    </div>
-                    <span x-show="!navCollapsed" class="hidden md:inline text-base font-semibold">Notifications</span>
-                    @if($unreadNotifications > 0)
-                        <span x-show="!navCollapsed" class="hidden md:inline ml-auto px-2 py-0.5 text-xs font-bold rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30">
-                            {{ $unreadNotifications }}
-                        </span>
-                    @endif
-                </a>
-
-                <!-- Upload -->
-                <a href="{{ route('upload') }}"
-                   class="flex items-center gap-4 px-3.5 py-3.5 rounded-2xl font-semibold transition-all duration-200 group {{ request()->routeIs('upload') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-elevated)]' }}"
-                   :title="navCollapsed ? 'Upload Media' : ''">
-                    <svg class="w-6 h-6 shrink-0 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                    </svg>
-                    <span x-show="!navCollapsed" class="hidden md:inline truncate text-base">Upload</span>
-                </a>
-
-                <!-- Profile -->
-                @if(auth()->check())
-                    <a href="{{ route('profile', ['username' => auth()->user()->username]) }}"
-                       class="flex items-center gap-4 px-3.5 py-3.5 rounded-2xl font-semibold transition-all duration-200 group {{ request()->is('profile/' . auth()->user()->username . '*') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-elevated)]' }}"
-                       :title="navCollapsed ? 'Profile' : ''">
-                        <svg class="w-6 h-6 shrink-0 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                        </svg>
-                        <span x-show="!navCollapsed" class="hidden md:inline truncate text-base">Profile</span>
-                    </a>
-                @endif
-
-                <!-- Settings -->
-                <a href="{{ route('settings') }}"
-                   class="flex items-center gap-4 px-3.5 py-3.5 rounded-2xl font-semibold transition-all duration-200 group {{ request()->routeIs('settings') ? 'accent-bg text-white shadow-md' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-elevated)]' }}"
-                   :title="navCollapsed ? 'Settings' : ''">
-                    <svg class="w-6 h-6 shrink-0 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                    </svg>
-                    <span x-show="!navCollapsed" class="hidden md:inline truncate text-base">Settings</span>
-                </a>
-
-                <!-- Admin Console (Shown for Admin Users) -->
-                <a href="{{ route('bug-reports.create') }}" class="flex items-center gap-4 rounded-2xl px-3.5 py-3.5 font-semibold text-[var(--text-muted)] transition hover:bg-[var(--bg-surface-elevated)] hover:text-[var(--text-main)]" :title="navCollapsed ? 'Report a bug' : ''">
-                    <span class="text-xl">🐛</span><span x-show="!navCollapsed" class="hidden truncate text-base md:inline">Report a bug</span>
-                </a>
-                @if(auth()->check() && auth()->user()->isAdmin())
-                    <a href="{{ route('admin') }}"
-                       class="flex items-center gap-4 px-3.5 py-3.5 rounded-2xl font-semibold transition-all duration-200 group {{ request()->routeIs('admin') ? 'bg-amber-500 text-white shadow-md' : 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/10' }}"
-                       :title="navCollapsed ? 'Admin Console' : ''">
-                        <svg class="w-6 h-6 shrink-0 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-                        </svg>
-                        <span x-show="!navCollapsed" class="hidden md:inline truncate text-base font-bold">Admin Panel</span>
-                    </a>
-                    <a href="{{ route('moderation') }}" class="flex items-center gap-4 rounded-2xl px-3.5 py-3.5 font-semibold text-amber-400 transition hover:bg-amber-500/10 hover:text-amber-300" :title="navCollapsed ? 'Moderation' : ''">
-                        <span class="text-xl">🛡️</span><span x-show="!navCollapsed" class="hidden truncate text-base md:inline">Moderation</span>
-                    </a>
-                @endif
             </nav>
 
             <!-- Bottom Account & Switcher Card (Twitter style) -->
@@ -313,6 +211,19 @@
                              x-transition:enter-end="opacity-100 translate-y-0 scale-100"
                              class="absolute bottom-full left-0 mb-3 w-64 p-3 rounded-2xl glass-panel shadow-2xl border border-[var(--border-medium)] z-50">
                             
+                            <div class="space-y-1 border-b border-[var(--border-subtle)] pb-2">
+                                <a href="{{ route('profile', auth()->user()->username) }}" @click="userMenuOpen = false" class="flex items-center gap-3 rounded-xl px-2.5 py-2 text-sm font-semibold text-[var(--text-main)] transition hover:bg-[var(--bg-surface-elevated)]">👤 <span>View Profile</span></a>
+                                <a href="{{ route('notifications') }}" @click="userMenuOpen = false" class="flex items-center justify-between rounded-xl px-2.5 py-2 text-sm font-semibold text-[var(--text-main)] transition hover:bg-[var(--bg-surface-elevated)]"><span>🔔 Notifications</span>@if($unreadNotifications > 0)<span class="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{{ $unreadNotifications }}</span>@endif</a>
+                                <a href="{{ route('lounge.dms') }}" @click="userMenuOpen = false" class="flex items-center justify-between rounded-xl px-2.5 py-2 text-sm font-semibold text-[var(--text-main)] transition hover:bg-[var(--bg-surface-elevated)]"><span>💬 Direct Messages</span>@if($unreadMessages > 0)<span class="rounded-full bg-sky-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{{ $unreadMessages }}</span>@endif</a>
+                                <a href="{{ route('tags.index') }}" @click="userMenuOpen = false" class="flex items-center gap-3 rounded-xl px-2.5 py-2 text-sm font-semibold text-[var(--text-main)] transition hover:bg-[var(--bg-surface-elevated)]">🏷️ <span>Tags &amp; Wiki</span></a>
+                                <a href="{{ route('settings') }}" @click="userMenuOpen = false" class="flex items-center gap-3 rounded-xl px-2.5 py-2 text-sm font-semibold text-[var(--text-main)] transition hover:bg-[var(--bg-surface-elevated)]">⚙️ <span>Settings</span></a>
+                                <a href="{{ route('bug-reports.create') }}" @click="userMenuOpen = false" class="flex items-center gap-3 rounded-xl px-2.5 py-2 text-sm font-semibold text-[var(--text-main)] transition hover:bg-[var(--bg-surface-elevated)]">🐛 <span>Report a bug</span></a>
+                                @if(auth()->user()->isAdmin())
+                                    <a href="{{ route('moderation') }}" @click="userMenuOpen = false" class="flex items-center gap-3 rounded-xl px-2.5 py-2 text-sm font-bold text-amber-400 transition hover:bg-amber-500/10">🛡️ <span>Moderation</span></a>
+                                    <a href="{{ route('admin') }}" @click="userMenuOpen = false" class="flex items-center gap-3 rounded-xl px-2.5 py-2 text-sm font-bold text-amber-400 transition hover:bg-amber-500/10">⚙️ <span>Admin Panel</span></a>
+                                @endif
+                            </div>
+
                             @if(app()->environment(['local', 'testing']))
                             <div class="text-xs font-semibold text-[var(--text-dim)] px-2 mb-2 uppercase tracking-wider">Switch Demo User</div>
                             <div class="space-y-1 mb-3">
@@ -534,6 +445,10 @@
                     @if($unreadMessages > 0)
                         <span class="px-1.5 py-0.5 rounded-full bg-sky-500 text-white font-extrabold text-[10px]">{{ $unreadMessages }}</span>
                     @endif
+                </a>
+
+                <a href="{{ route('tags.index') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 rounded-2xl bg-[var(--bg-surface-elevated)] p-3 text-xs font-semibold">
+                    <span class="accent-text" aria-hidden="true">🏷️</span><span>Tags &amp; Wiki</span>
                 </a>
 
                 <a href="{{ route('settings') }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 p-3 rounded-2xl bg-[var(--bg-surface-elevated)] font-semibold text-xs">
